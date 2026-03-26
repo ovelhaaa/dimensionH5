@@ -14,3 +14,4 @@ add_test(NAME biquad_tests COMMAND test_biquad)
 # WAV Renderer Executable
 add_executable(render_wav render_wav_main.c wav_writer.c)
 target_link_libraries(render_wav PRIVATE dimension_core)
+add_test(NAME render_wav_smoke_test COMMAND render_wav)
