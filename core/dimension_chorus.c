@@ -175,3 +175,94 @@ void DimensionChorus_ProcessBlock(
 
     s->writeIndex = wIdx;
 }
+
+void DimensionChorus_ProcessBlock_Inspect(
+    DimensionChorusState* s,
+    const float* inMono,
+    float* outStereo,
+    float* outDry,
+    float* outWet1,
+    float* outWet2,
+    float* outMonoSum,
+    size_t blockSize)
+{
+    // Update control params (rate, baseMs, etc.) once per block
+    Dimension_UpdateControl(s);
+
+    // Convert milliseconds to sample lengths (based on native SR)
+    const float samplesPerMs = DSP_SAMPLE_RATE / 1000.0f;
+    const float baseSamps  = s->baseMs * samplesPerMs;
+    const float depthSamps = s->depth  * samplesPerMs;
+    const float ratePhaseInc = s->rate / DSP_SAMPLE_RATE;
+
+    uint32_t wIdx = s->writeIndex;
+
+    for (size_t i = 0; i < blockSize; i++) {
+        const float dry = inMono[i];
+
+        // 1. Write input to delay buffer
+        s->delayBuffer[wIdx] = dry;
+
+        // 2. Compute LFO and Smoothed Triangle
+        s->phaseAcc += ratePhaseInc;
+        if (s->phaseAcc >= 1.0f) {
+            s->phaseAcc -= 1.0f;
+        }
+
+        // Generate rough triangle [-1, 1]
+        float triRaw;
+        if (s->phaseAcc < 0.5f) {
+            triRaw = 4.0f * s->phaseAcc - 1.0f;
+        } else {
+            triRaw = 3.0f - 4.0f * s->phaseAcc;
+        }
+
+        // Low-pass smooth the triangle wave
+        s->lfoSmoothed += s->lfoCoef * (triRaw - s->lfoSmoothed);
+
+        // Calculate actual delay taps
+        const float tapTime1 = baseSamps + depthSamps * s->lfoSmoothed;
+        const float tapTime2 = baseSamps - depthSamps * s->lfoSmoothed;
+
+        float readPos1 = (float)wIdx - tapTime1;
+        float readPos2 = (float)wIdx - tapTime2;
+
+        if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
+        if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
+
+        // 3. Hermite Interpolated Read
+        float wet1 = Dsp_ReadHermite(s->delayBuffer, readPos1);
+        float wet2 = Dsp_ReadHermite(s->delayBuffer, readPos2);
+
+        // 4. Voicing HPF + LPF
+        wet1 = Dsp_BiquadProcess(&s->wet1Hpf, wet1);
+        wet1 = Dsp_BiquadProcess(&s->wet1Lpf, wet1);
+
+        wet2 = Dsp_BiquadProcess(&s->wet2Hpf, wet2);
+        wet2 = Dsp_BiquadProcess(&s->wet2Lpf, wet2);
+
+        // 5. Stereo Crossmix
+        float outL = s->dryGain * dry + s->mainW * wet1 - s->crossW * wet2;
+        float outR = s->dryGain * dry + s->mainW * wet2 - s->crossW * wet1;
+
+        float clippedL = Dsp_SoftClip(outL);
+        float clippedR = Dsp_SoftClip(outR);
+
+        // 6. Output Assignment with Safety Soft Clip
+        if (outStereo) {
+            outStereo[2 * i + 0] = clippedL;
+            outStereo[2 * i + 1] = clippedR;
+        }
+
+        // Inspection outputs
+        if (outDry) outDry[i] = dry;
+        if (outWet1) outWet1[i] = wet1;
+        if (outWet2) outWet2[i] = wet2;
+        if (outMonoSum) outMonoSum[i] = 0.5f * (clippedL + clippedR); // Simple sum (-6dB)
+
+        // 7. Advance write pointer
+        wIdx = (wIdx + 1u) & DELAY_BUFFER_MASK;
+    }
+
+    s->writeIndex = wIdx;
+}
