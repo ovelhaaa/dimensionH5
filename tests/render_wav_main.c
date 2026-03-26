@@ -87,6 +87,11 @@ int main() {
 
     // Save the dry signal for reference
     float* inStereoDry = (float*)malloc(TOTAL_FRAMES * 2 * sizeof(float));
+    if (!inStereoDry) {
+        printf("Failed to allocate buffer for dry reference signal\n");
+        free(inMono);
+        return 1;
+    }
     for (size_t i = 0; i < TOTAL_FRAMES; i++) {
         inStereoDry[i*2] = inMono[i];
         inStereoDry[i*2 + 1] = inMono[i];
