@@ -76,11 +76,13 @@ void AudioEngine_Init(void)
 void AudioEngine_SetMode(int mode)
 {
     // Filtra modos (0-3) de forma segura caso um valor inesperado venha.
-    DimensionMode m = DIMENSION_MODE_1;
-    if (mode == 0) m = DIMENSION_MODE_1;
-    else if (mode == 1) m = DIMENSION_MODE_2;
-    else if (mode == 2) m = DIMENSION_MODE_3;
-    else if (mode == 3) m = DIMENSION_MODE_4;
+    DimensionMode m;
+    switch (mode) {
+        case 1: m = DIMENSION_MODE_2; break;
+        case 2: m = DIMENSION_MODE_3; break;
+        case 3: m = DIMENSION_MODE_4; break;
+        default: m = DIMENSION_MODE_1; break;
+    }
 
     DimensionChorus_SetMode(&chorus_state, m);
 }
