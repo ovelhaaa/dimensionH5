@@ -1,6 +1,7 @@
 #include "app/audio_engine.h"
 #include "platform/stm32h5/audio_buffers.h"
 #include "core/dimension_chorus.h"
+#include <string.h>
 
 // Buffers internos para conversão (processamento em blocos de 32 frames)
 static float in_mono[AUDIO_BLOCK_FRAMES];
@@ -68,12 +69,8 @@ void AudioEngine_Init(void)
     DimensionChorus_Init(&chorus_state);
 
     // Zerar buffers float
-    for (size_t i = 0; i < AUDIO_BLOCK_FRAMES; i++) {
-        in_mono[i] = 0.0f;
-    }
-    for (size_t i = 0; i < AUDIO_BLOCK_FRAMES * AUDIO_CHANNELS; i++) {
-        out_stereo[i] = 0.0f;
-    }
+    memset(in_mono, 0, sizeof(in_mono));
+    memset(out_stereo, 0, sizeof(out_stereo));
 }
 
 void AudioEngine_SetMode(int mode)
