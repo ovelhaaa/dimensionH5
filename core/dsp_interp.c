@@ -7,9 +7,6 @@
  */
 float Dsp_ReadHermite(const float* buffer, float readPos)
 {
-    // Make sure we have a positive index handling wrap effectively
-    // To handle negative readPos correctly during integer casting, we shift up by a huge multiple of buffer size
-    // For normal usage, readPos should be wrapped beforehand, but this adds robustness
     int32_t i0 = (int32_t)readPos;
 
     // Fractional part
