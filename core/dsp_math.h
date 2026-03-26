@@ -11,24 +11,32 @@
 /**
  * @brief Safety soft-clipper for the final output stage.
  *
- * Uses a polynomial approximation: x - x^3 / 3 for -1 <= x <= 1.
- * Hard clamp beyond this range to ensure stability.
+ * Behavior/Curve:
+ * - Uses a polynomial approximation: f(x) = x - (x^3 / 3) for x in [-1, 1].
+ * - Linear/almost-linear range: For inputs near 0 (e.g., [-0.3, 0.3]), f(x) ~ x.
+ *   At x = 0.5, output is 0.458 (minor compression).
+ * - Transition point & Max effective output: At x = 1.0, the output peaks at 2/3 (0.666...).
+ * - Out of bounds: Hard clamp at 2/3 for any input > 1.0 (or < -1.0).
+ *
+ * Note for V1:
+ * This provides absolute safety to prevent wrap-around or distortion spikes before DAC,
+ * but its hard maximum is bounded at 0.666... (or -3.5dBFS). If the application requires
+ * true 0dBFS maximum peak output, scaling both the input and output by 1.5 would be necessary,
+ * but for this Dimension Chorus V1, maintaining headroom is preferred.
  *
  * @param x Input float value
  * @return Soft-clipped float value
  */
 static inline float Dsp_SoftClip(float x)
 {
-    // Threshold where the curve meets the clamp
     const float threshold = 1.0f;
 
     if (x >= threshold) {
-        return 2.0f / 3.0f;
+        return 0.666666667f; // 2/3
     } else if (x <= -threshold) {
-        return -2.0f / 3.0f;
+        return -0.666666667f; // -2/3
     }
 
-    // Polynomial soft-clip curve
     return x - (x * x * x) * (1.0f / 3.0f);
 }
 

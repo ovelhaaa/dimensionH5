@@ -136,12 +136,17 @@ void DimensionChorus_ProcessBlock(
         const float tapTime1 = baseSamps + depthSamps * s->lfoSmoothed;
         const float tapTime2 = baseSamps - depthSamps * s->lfoSmoothed;
 
-        // Calculate fractional read positions wrapping downwards from write index.
-        // E.g. If write = 5, delay = 2, read = 3. Add DELAY_BUFFER_SIZE before modulo for safety.
+        // Calculate fractional read positions.
+        // The delay is measured from the current writeIndex.
+        // tapTime represents the delay in samples.
+        // Example: If wIdx = 5, tapTime = 2.5, readPos = 2.5.
+
         float readPos1 = (float)wIdx - tapTime1;
         float readPos2 = (float)wIdx - tapTime2;
 
-        // Handling negative values correctly relative to buffer bounds
+        // Handling negative float values correctly before truncation in Dsp_ReadHermite.
+        // While bitwise masking in Hermite handles integers well, shifting the float
+        // ensures the fractional part remains correctly oriented (positive fractional distance).
         if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
         if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
 
