@@ -19,7 +19,7 @@ void generate_sine(float* buffer, size_t numFrames, float freq) {
     float phaseInc = 2.0f * (float)M_PI * freq / SAMPLE_RATE;
     for (size_t i = 0; i < numFrames; i++) {
         buffer[i] = 0.8f * sinf(phase);
-        phase += phaseInc;
+        phase = fmodf(phase + phaseInc, 2.0f * (float)M_PI);
     }
 }
 
@@ -31,7 +31,9 @@ void generate_sweep(float* buffer, size_t numFrames) {
         float time = (float)i / SAMPLE_RATE;
         float duration = DURATION_SECONDS;
         float instantaneous_freq = f0 + (f1 - f0) * (time / duration);
-        phase += 2.0f * (float)M_PI * instantaneous_freq / SAMPLE_RATE;
+        float dt = 1.0f / SAMPLE_RATE;
+        phase += 2.0f * (float)M_PI * instantaneous_freq * dt;
+        phase = fmodf(phase, 2.0f * (float)M_PI);
         buffer[i] = 0.8f * sinf(phase);
     }
 }
@@ -52,9 +54,9 @@ void generate_chord(float* buffer, size_t numFrames) {
     for (size_t i = 0; i < numFrames; i++) {
         float val = sinf(phase220) + sinf(phase275) + sinf(phase330);
         buffer[i] = 0.8f * (val / 3.0f); // Scale to 0.8 max
-        phase220 += inc220;
-        phase275 += inc275;
-        phase330 += inc330;
+        phase220 = fmodf(phase220 + inc220, 2.0f * (float)M_PI);
+        phase275 = fmodf(phase275 + inc275, 2.0f * (float)M_PI);
+        phase330 = fmodf(phase330 + inc330, 2.0f * (float)M_PI);
     }
 }
 
@@ -163,6 +165,11 @@ int render_test_signal(const char* signalName, const float* inMono, size_t total
 
         if (!outStereo || !outDry || !outWet1 || !outWet2 || !outMonoSum) {
             printf("Memory allocation failed!\n");
+            free(outStereo);
+            free(outDry);
+            free(outWet1);
+            free(outWet2);
+            free(outMonoSum);
             return -1;
         }
 
