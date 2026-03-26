@@ -1,9 +1,18 @@
 #include "dsp_interp.h"
 #include <stdint.h>
 
-/**
+
+ /**
  * Reads using 3rd-order 4-point Hermite interpolation.
  * Uses bitwise wrapping exclusively for bounds checking.
+ *
+ * The 4 points chosen are:
+ * [i0 - 1], [i0], [i0 + 1], [i0 + 2]
+ * where i0 is the truncated integer part of readPos.
+ *
+ * Note: readPos must be >= 0 for the fractional extraction (readPos - i0)
+ * to behave correctly. The caller is responsible for ensuring readPos
+ * is wrapped into the positive range [0, DELAY_BUFFER_SIZE).
  */
 float Dsp_ReadHermite(const float* buffer, float readPos)
 {
