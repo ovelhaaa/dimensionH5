@@ -1,6 +1,8 @@
 #ifndef AUDIO_APP_H
 #define AUDIO_APP_H
 
+#include "app/audio_engine.h" // Necessário para AudioPipelineMode
+
 /**
  * @file audio_app.h
  * @brief Ponto de entrada unificado (Boot Path e Loop) da aplicação de áudio.
@@ -11,14 +13,6 @@
  * - Encapsular o loop de processamento para ser engatado facilmente no
  *   `main.c` gerado pelo CubeMX.
  */
-
-/**
- * @brief Modos de operação do pipeline de áudio.
- */
-typedef enum {
-    AUDIO_PIPELINE_PASSTHROUGH = 0, /* ADC -> DMA RX -> DMA TX -> DAC puro (sem DSP) */
-    AUDIO_PIPELINE_DSP              /* ADC -> DMA RX -> Processamento DSP -> DMA TX -> DAC */
-} AudioPipelineMode;
 
 /**
  * @brief Modo inicial do Dimension Chorus na inicialização.

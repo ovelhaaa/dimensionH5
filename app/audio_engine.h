@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "app/audio_app.h" // Necessário para AudioPipelineMode
-
 /**
  * @file audio_engine.h
  * @brief Engine de processamento DSP para Dimension Chorus, ponte entre Plataforma e Core.
@@ -16,6 +14,14 @@
  * - Extração de canal Mono da fonte Stereo.
  * - Controle da instância do DimensionChorusState.
  */
+
+/**
+ * @brief Modos de operação do pipeline de áudio.
+ */
+typedef enum {
+    AUDIO_PIPELINE_PASSTHROUGH = 0, /* ADC -> DMA RX -> DMA TX -> DAC puro (sem DSP) */
+    AUDIO_PIPELINE_DSP              /* ADC -> DMA RX -> Processamento DSP -> DMA TX -> DAC */
+} AudioPipelineMode;
 
 /**
  * @brief Seleciona o modo de operação do pipeline (Passthrough ou DSP).
