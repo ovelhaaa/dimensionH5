@@ -109,13 +109,9 @@ void AudioEngine_SetPipelineMode(AudioPipelineMode mode)
 void AudioEngine_SetMode(int mode)
 {
     // Filtra modos (0-3) de forma segura caso um valor inesperado venha.
-    DimensionMode m;
-    switch (mode) {
-        case 1: m = DIMENSION_MODE_2; break;
-        case 2: m = DIMENSION_MODE_3; break;
-        case 3: m = DIMENSION_MODE_4; break;
-        default: m = DIMENSION_MODE_1; break;
-    }
+    DimensionMode m = (mode >= 0 && mode < DIMENSION_MODE_COUNT)
+                      ? (DimensionMode)mode
+                      : DIMENSION_MODE_1;
 
     DimensionChorus_SetMode(&chorus_state, m);
 }

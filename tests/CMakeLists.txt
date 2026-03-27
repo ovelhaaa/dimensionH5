@@ -11,6 +11,10 @@ add_executable(test_biquad test_main.c test_biquad.c)
 target_link_libraries(test_biquad PRIVATE dimension_core)
 add_test(NAME biquad_tests COMMAND test_biquad)
 
+add_executable(test_audio_engine test_main.c test_audio_engine.c)
+target_link_libraries(test_audio_engine PRIVATE dimension_core)
+add_test(NAME audio_engine_tests COMMAND test_audio_engine)
+
 # WAV Renderer Executable
 add_executable(render_wav render_wav_main.c wav_writer.c)
 target_link_libraries(render_wav PRIVATE dimension_core)
