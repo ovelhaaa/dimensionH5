@@ -13,6 +13,12 @@
  */
 
 /**
+ * @brief Modo inicial do Dimension Chorus na inicialização.
+ * Valor 1 corresponde ao DIMENSION_MODE_2 no switch de AudioEngine_SetMode.
+ */
+#define AUDIO_APP_INITIAL_MODE 1
+
+/**
  * @brief Inicializa todo o sistema de áudio e inicia o fluxo DMA.
  *
  * Ordem estrita:
