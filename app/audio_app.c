@@ -33,8 +33,8 @@ void AudioApp_Init(void)
     // 1. Iniciar o Core DSP e buffers internos
     AudioEngine_Init();
 
-    // 2. Definir o modo inicial fixo da v1 (exemplo: Modo 1)
-    AudioEngine_SetMode(1);
+    // 2. Definir o modo inicial fixo da v1 (Chorus Mode 2)
+    AudioEngine_SetMode(AUDIO_APP_INITIAL_MODE);
 
     // 3. Inicializar a Plataforma (Zerar buffers DMA RX/TX)
     AudioPlatform_Init();
