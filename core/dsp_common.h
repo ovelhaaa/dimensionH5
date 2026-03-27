@@ -16,6 +16,10 @@
 #define DELAY_BUFFER_SIZE 1024
 #define DELAY_BUFFER_MASK (DELAY_BUFFER_SIZE - 1)
 
+// Static assertion to ensure DELAY_BUFFER_SIZE is a power of 2
+_Static_assert((DELAY_BUFFER_SIZE & DELAY_BUFFER_MASK) == 0,
+               "DELAY_BUFFER_SIZE must be a power of 2 for bitwise wrapping to work.");
+
 // Expected processing block size
 #define DSP_BLOCK_SIZE 32
 
