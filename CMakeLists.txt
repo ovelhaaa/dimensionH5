@@ -15,7 +15,7 @@ add_library(dimension_core STATIC
     core/dsp_biquad.c
     core/dsp_interp.c
 )
-target_include_directories(dimension_core PUBLIC core)
+target_include_directories(dimension_core PUBLIC core .)
 target_link_libraries(dimension_core m) # link math library for host
 
 # Enable testing
