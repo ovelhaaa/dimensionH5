@@ -14,17 +14,18 @@ static DimensionChorusState chorus_state;
  * @brief Converte e desempacota RX I2S int32_t interleaved para L (mono) float32_t.
  *
  * @note Esta implementação assume que o sample RX no int32_t já está "sign-extended"
- *       para 32 bits pelo driver / hardware do PCM1808 (escala real).
- *       Se o periférico estiver configurado para 24-bit left-justified (e os 8
- *       bits LSBs não representam sign), você deve ajustar a etapa de unpack
- *       (ex: shift arithmetic ou shift right por 8 bits).
- *       A política "v1" atual extrai apenas o canal Esquerdo (L).
- *       Para migrar para média L/R com headroom, o loop deve somar ambos:
- *       in_mono[i] = (L + R) * 0.5f;
+ *       para 32 bits pelo driver / hardware do PCM1808.
+ *       Se o hardware entregar 24-bit left-justified, você deve ajustar o código:
+ *       float val = (float)(l_sample >> 8) * (1.0f / 8388608.0f); // para 24-bit shift
+ *
+ *       A política atual (v1) usa apenas o canal Esquerdo (L) e descarta o Direito (R).
+ *       Para uma soma mono (L+R)/2 segura contra clip, use:
+ *       outMono[i] = ((float)l_sample + (float)r_sample) * 0.5f * norm;
  */
 static inline void UnpackRxToMonoFloat(const int32_t* rxHalfBuffer, float* outMono, size_t frames)
 {
-    const float norm = 1.0f / 2147483648.0f; // Escala 32 bits com sinal
+    // Escala 32 bits assumindo valor máximo em 2147483648.0f.
+    const float norm = 1.0f / 2147483648.0f;
 
     for (size_t i = 0; i < frames; i++) {
         // Pega canal L (index 0 no par interleaved L/R)
@@ -41,14 +42,15 @@ static inline void UnpackRxToMonoFloat(const int32_t* rxHalfBuffer, float* outMo
  * @brief Converte, satura e empacota out float32_t stereo interleaved em TX I2S int32_t.
  *
  * @note Assumindo container 32-bit sign-extended pelo hardware do PCM5102.
- *       Faz clamp para evitar overflow na conversão inteira e escala em [-2147483648, 2147483647].
- *       Se left-justified de 24 bits for mandatório e o DMA de tx esperar zero-padding nos LSBs,
- *       faça bitwise masking: val & ~0xFF.
+ *       Faz clamp em [-1.0f, 1.0f) para evitar overflow na conversão inteira
+ *       e escala no intervalo de 32 bits.
+ *       Se o DMA/hardware esperar dados em 24-bit left-justified preenchidos com zero,
+ *       faça o shift para a esquerda: (int32_t)(sample * 8388608.0f) << 8;
  */
 static inline void PackStereoFloatToTx(const float* inStereo, int32_t* txHalfBuffer, size_t frames)
 {
-    // Limite ligeiramente abaixo de 1.0 para margem de float e evitar erro na conversão de inteiro de 32 bits
-    const float clip_max = 0.9999999f;
+    // Limite superior abaixo de 1.0 representável com segurança na mantissa de 24 bits
+    const float clip_max = 2147483520.0f / 2147483648.0f; // Aproximadamente 0.99999994
     const float clip_min = -1.0f;
     const float scale = 2147483648.0f;
 
@@ -76,13 +78,11 @@ void AudioEngine_Init(void)
 void AudioEngine_SetMode(int mode)
 {
     // Filtra modos (0-3) de forma segura caso um valor inesperado venha.
-    DimensionMode m;
-    switch (mode) {
-        case 1: m = DIMENSION_MODE_2; break;
-        case 2: m = DIMENSION_MODE_3; break;
-        case 3: m = DIMENSION_MODE_4; break;
-        default: m = DIMENSION_MODE_1; break;
-    }
+    DimensionMode m = DIMENSION_MODE_1;
+    if (mode == 0) m = DIMENSION_MODE_1;
+    else if (mode == 1) m = DIMENSION_MODE_2;
+    else if (mode == 2) m = DIMENSION_MODE_3;
+    else if (mode == 3) m = DIMENSION_MODE_4;
 
     DimensionChorus_SetMode(&chorus_state, m);
 }
