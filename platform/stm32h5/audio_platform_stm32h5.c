@@ -3,10 +3,15 @@
 #include "app/audio_engine.h"
 #include <string.h>
 
-// Includes de HAL (ST) e abstrações do CubeMX futuramente irão aqui
+// PONTO DE INTEGRAÇÃO DO CUBEMX:
+// 1. Inclua o HAL e as definições principais geradas.
 // #include "stm32h5xx_hal.h"
-// extern SAI_HandleTypeDef hsai_BlockA1; // TX
-// extern SAI_HandleTypeDef hsai_BlockB1; // RX
+// #include "main.h"
+
+// 2. Declare externamente os handles do SAI/I2S configurados no CubeMX.
+// Ajuste os nomes ("hsai_BlockA1", "hsai_BlockB1") conforme o projeto real.
+// extern SAI_HandleTypeDef hsai_BlockA1; // Ex: Usado para TX (DAC PCM5102)
+// extern SAI_HandleTypeDef hsai_BlockB1; // Ex: Usado para RX (ADC PCM1808)
 
 /**
  * Flags atômicas (ou voláteis simples, dadas as interrupções de uma só prioridade)
@@ -30,20 +35,23 @@ void AudioPlatform_Init(void)
 
 void AudioPlatform_Start(void)
 {
-    // Ponto de integração dependente de handles gerados pelo CubeMX:
-    // Deve ser substituído pela chamada real aos drivers ST no futuro.
-    // Exemplo:
-    // HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t*)dma_tx_buffer, AUDIO_FULL_BUFFER_WORDS);
-    // HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t*)dma_rx_buffer, AUDIO_FULL_BUFFER_WORDS);
-
-    // Assegura flags zeradas
+    // Assegura flags zeradas antes de ligar o DMA
     rx_half_ready = false;
     rx_full_ready = false;
+
+    // PONTO DE INTEGRAÇÃO DO CUBEMX:
+    // Inicie o envio e recebimento por DMA circular.
+    // Os buffers são convertidos para uint8_t* na chamada HAL, mas operam em 32-bit (words).
+    // Duração total do buffer DMA definido em `AUDIO_FULL_BUFFER_WORDS`.
+    // Exemplo:
+    // HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t*)dma_tx_buffer, AUDIO_FULL_BUFFER_WORDS);
+    // HAL_SAI_Receive_DMA(&hsai_BlockB1,  (uint8_t*)dma_rx_buffer, AUDIO_FULL_BUFFER_WORDS);
 }
 
 void AudioPlatform_Stop(void)
 {
-    // Ponto de integração dependente de handles gerados pelo CubeMX:
+    // PONTO DE INTEGRAÇÃO DO CUBEMX:
+    // Paralisa as transferências.
     // HAL_SAI_DMAStop(&hsai_BlockA1);
     // HAL_SAI_DMAStop(&hsai_BlockB1);
 }
@@ -76,7 +84,18 @@ void AudioPlatform_ProcessLoop(void)
 }
 
 // ==============================================================================
-// CALLBACKS CHAMADAS PELO HAL DA ST (e.g. stm32h5xx_it.c ou rotinas do CubeMX)
+// CALLBACKS CHAMADAS PELO HAL DA ST
+//
+// PONTO DE INTEGRAÇÃO DO CUBEMX:
+// Estas funções DEGUEM ser chamadas de dentro das rotinas geradas pela ST (geralmente
+// em `stm32h5xx_it.c` ou `main.c`).
+// Exemplo se usando SAI DMA para RX:
+// void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai) {
+//     if(hsai->Instance == SAI1_Block_B) { AudioPlatform_OnRxHalfComplete(); }
+// }
+// void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai) {
+//     if(hsai->Instance == SAI1_Block_B) { AudioPlatform_OnRxFullComplete(); }
+// }
 // ==============================================================================
 
 void AudioPlatform_OnRxHalfComplete(void)

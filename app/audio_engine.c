@@ -10,9 +10,16 @@ static float out_stereo[AUDIO_BLOCK_FRAMES * AUDIO_CHANNELS];
 // Instância principal (e única na v1) do efeito DSP
 static DimensionChorusState chorus_state;
 
+// Modo atual do pipeline
+static AudioPipelineMode current_pipeline_mode = AUDIO_PIPELINE_PASSTHROUGH;
+
 /**
  * @brief Helper interno: Extrai áudio útil de 24 bits (left-justified) do container 32-bit.
  *        Faz o shift pra recuperar o valor com sinal em 24 bits reais.
+ *
+ * @attention HIPÓTESE DA v1: Assume PCM útil de 24 bits left-justified em int32_t.
+ *            Se a configuração real do periférico (CubeMX/SAI) usar outro alinhamento
+ *            (ex. right-justified), ajuste esta função (ex. removendo o shift).
  */
 static inline int32_t AudioEngine_UnpackRx24In32(int32_t raw_32bit)
 {
@@ -24,6 +31,10 @@ static inline int32_t AudioEngine_UnpackRx24In32(int32_t raw_32bit)
 
 /**
  * @brief Helper interno: Empacota áudio nominal 24-bit de volta pra formato left-justified 32-bit.
+ *
+ * @attention HIPÓTESE DA v1: Assume PCM útil de 24 bits left-justified em int32_t.
+ *            Se a configuração real do periférico (CubeMX/SAI) usar outro alinhamento
+ *            (ex. right-justified), ajuste esta função (ex. removendo o shift).
  */
 static inline int32_t AudioEngine_PackTx24In32(int32_t sample_24bit)
 {
@@ -90,6 +101,11 @@ void AudioEngine_Init(void)
     memset(out_stereo, 0, sizeof(out_stereo));
 }
 
+void AudioEngine_SetPipelineMode(AudioPipelineMode mode)
+{
+    current_pipeline_mode = mode;
+}
+
 void AudioEngine_SetMode(int mode)
 {
     // Filtra modos (0-3) de forma segura caso um valor inesperado venha.
@@ -106,6 +122,14 @@ void AudioEngine_SetMode(int mode)
 
 void AudioEngine_ProcessBlock(int32_t* rxHalfBuffer, int32_t* txHalfBuffer)
 {
+    if (current_pipeline_mode == AUDIO_PIPELINE_PASSTHROUGH) {
+        // Modo Passthrough (Teste/Bring-up): Copia L/R diretamente sem passar por Float nem DSP.
+        // O tamanho é AUDIO_BLOCK_FRAMES (32 frames) * 2 canais = 64 words (int32_t).
+        memcpy(txHalfBuffer, rxHalfBuffer, AUDIO_BLOCK_FRAMES * AUDIO_CHANNELS * sizeof(int32_t));
+        return;
+    }
+
+    // Modo DSP ativo:
     // 1. Unpack & Conversão RX (container 32, payload 24) para Mono Float L-only (v1).
     AudioEngine_ConvertInputPcm32ToMonoFloat(rxHalfBuffer, in_mono, AUDIO_BLOCK_FRAMES);
 

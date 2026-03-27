@@ -13,23 +13,45 @@
  */
 
 /**
+ * @brief Modos de operação do pipeline de áudio.
+ */
+typedef enum {
+    AUDIO_PIPELINE_PASSTHROUGH = 0, /* ADC -> DMA RX -> DMA TX -> DAC puro (sem DSP) */
+    AUDIO_PIPELINE_DSP              /* ADC -> DMA RX -> Processamento DSP -> DMA TX -> DAC */
+} AudioPipelineMode;
+
+/**
  * @brief Modo inicial do Dimension Chorus na inicialização.
  * Valor 1 corresponde ao DIMENSION_MODE_2 no switch de AudioEngine_SetMode.
  */
 #define AUDIO_APP_INITIAL_MODE 1
 
 /**
- * @brief Inicializa todo o sistema de áudio e inicia o fluxo DMA.
+ * @brief Inicializa todo o sistema de áudio e buffers, sem ligar o transporte.
  *
  * Ordem estrita:
  * 1. Inicializa a Engine DSP.
- * 2. Define o modo inicial.
+ * 2. Define o modo inicial e o pipeline padrao (Passthrough recomendado para bring-up).
  * 3. Inicializa buffers e recursos da Plataforma.
- * 4. Inicializa os Codecs (via GPIOs).
- * 5. Dispara o DMA.
- * 6. Libera os Codecs para operação.
+ * 4. Inicializa os Codecs (via GPIOs de controle).
  */
 void AudioApp_Init(void);
+
+/**
+ * @brief Inicia o fluxo de áudio real no hardware.
+ *
+ * Ordem estrita:
+ * 1. Dispara o DMA (RX e TX) via HAL.
+ * 2. Libera os Codecs para operação (desliga Mute/Standby).
+ */
+void AudioApp_Start(void);
+
+/**
+ * @brief Alterna dinamicamente entre passthrough limpo e DSP ativo.
+ *
+ * @param mode Modo de pipeline desejado.
+ */
+void AudioApp_SetPipelineMode(AudioPipelineMode mode);
 
 /**
  * @brief Função não bloqueante para ser chamada no superloop (while 1 do main.c).
