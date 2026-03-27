@@ -12,5 +12,5 @@
  * __attribute__((section(".dma_ram"))) int32_t dma_rx_buffer[...];
  */
 
-int32_t dma_rx_buffer[AUDIO_DMA_BUFFER_WORDS];
-int32_t dma_tx_buffer[AUDIO_DMA_BUFFER_WORDS];
+int32_t dma_rx_buffer[AUDIO_FULL_BUFFER_WORDS];
+int32_t dma_tx_buffer[AUDIO_FULL_BUFFER_WORDS];

@@ -8,29 +8,33 @@
  * @file audio_codec_if.c
  * @brief Implementação stub para as configurações do PCM1808 / PCM5102.
  *
- * Como o PCM1808 (ADC) e PCM5102 (DAC) são hardware-based (configuração por pinos),
- * muitas vezes eles não usam I2C ou SPI. Eles precisam de clocks estáveis
- * (MCLK, BCLK, LRCLK) e de sinais de Mute / XSMT.
+ * NOTA DE ARQUITETURA: Não misture "transporte serial/DMA" com "codec".
+ * Como o PCM1808 (ADC) e PCM5102 (DAC) são hardware-based (configurados via pinos de GPIO),
+ * eles não possuem barramento de controle I2C ou SPI. Logo, este módulo deve se
+ * limitar estritamente ao controle de GPIOs de MUTE (XSMT), Reset e afins.
+ * O gerenciamento do tráfego I2S / SAI e DMA pertence a `audio_platform_stm32h5.c`.
  */
 
 void AudioCodec_Init(void)
 {
-    // Exemplo do que se faria aqui na placa real:
-    // HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_RESET); // Mute ativo
-    // HAL_GPIO_WritePin(ADC_FMT_GPIO_Port, ADC_FMT_Pin, GPIO_PIN_RESET);   // Configurar formato I2S (exemplo)
+    // PONTO DE INTEGRAÇÃO DO CUBEMX:
+    // Coloque aqui apenas os GPIOs de hardware físico dos codecs.
+    // Exemplo de placa real (MUTE acionado como init-state seguro):
+    // HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_RESET);
 
-    // Como os pinos exatos da placa ainda não estão definidos:
-    // (Stub vazio por enquanto)
+    // (Stub vazio para inicialização da v1)
 }
 
 void AudioCodec_Start(void)
 {
-    // Apenas habilitar os codecs desfazendo o mute
+    // PONTO DE INTEGRAÇÃO DO CUBEMX:
+    // Habilitar codecs desfazendo o mute.
     // Exemplo: HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_SET);
 }
 
 void AudioCodec_Stop(void)
 {
-    // Força mute
+    // PONTO DE INTEGRAÇÃO DO CUBEMX:
+    // Força mute rápido.
     // Exemplo: HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_RESET);
 }
