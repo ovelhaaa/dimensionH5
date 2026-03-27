@@ -1,8 +1,9 @@
 #include "audio_codec_if.h"
 
-// Includes de HAL (ST) e abstrações do CubeMX futuramente irão aqui
+// PONTO DE INTEGRAÇÃO DO CUBEMX:
+// 1. Incluir HAL e `main.h` para que as macros dos pinos (ex. DAC_XSMT_Pin) fiquem visíveis.
 // #include "stm32h5xx_hal.h"
-// #include "main.h" // Se as macros dos pinos de GPIO estiverem aqui
+// #include "main.h"
 
 /**
  * @file audio_codec_if.c
@@ -18,23 +19,24 @@
 void AudioCodec_Init(void)
 {
     // PONTO DE INTEGRAÇÃO DO CUBEMX:
-    // Coloque aqui apenas os GPIOs de hardware físico dos codecs.
-    // Exemplo de placa real (MUTE acionado como init-state seguro):
+    // Configure os GPIOs para o estado inicial "seguro" (em geral, MUTE ativado ou RESET segurado).
+    // O DAC PCM5102 possui o pino XSMT. O estado RESET (0) aciona o soft mute interno.
+    // Exemplo:
     // HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_RESET);
-
-    // (Stub vazio para inicialização da v1)
 }
 
 void AudioCodec_Start(void)
 {
     // PONTO DE INTEGRAÇÃO DO CUBEMX:
-    // Habilitar codecs desfazendo o mute.
-    // Exemplo: HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_SET);
+    // Habilita a saída de áudio de fato, tirando o Codec do Mute.
+    // Exemplo:
+    // HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_SET);
 }
 
 void AudioCodec_Stop(void)
 {
     // PONTO DE INTEGRAÇÃO DO CUBEMX:
-    // Força mute rápido.
-    // Exemplo: HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_RESET);
+    // Força mute rápido para evitar pops ou clicks ao desligar a engine de áudio.
+    // Exemplo:
+    // HAL_GPIO_WritePin(DAC_XSMT_GPIO_Port, DAC_XSMT_Pin, GPIO_PIN_RESET);
 }

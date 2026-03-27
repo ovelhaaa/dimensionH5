@@ -1,6 +1,8 @@
 #ifndef AUDIO_APP_H
 #define AUDIO_APP_H
 
+#include "app/audio_engine.h" // Necessário para AudioPipelineMode
+
 /**
  * @file audio_app.h
  * @brief Ponto de entrada unificado (Boot Path e Loop) da aplicação de áudio.
@@ -19,17 +21,31 @@
 #define AUDIO_APP_INITIAL_MODE 1
 
 /**
- * @brief Inicializa todo o sistema de áudio e inicia o fluxo DMA.
+ * @brief Inicializa todo o sistema de áudio e buffers, sem ligar o transporte.
  *
  * Ordem estrita:
  * 1. Inicializa a Engine DSP.
- * 2. Define o modo inicial.
+ * 2. Define o modo inicial e o pipeline padrao (Passthrough recomendado para bring-up).
  * 3. Inicializa buffers e recursos da Plataforma.
- * 4. Inicializa os Codecs (via GPIOs).
- * 5. Dispara o DMA.
- * 6. Libera os Codecs para operação.
+ * 4. Inicializa os Codecs (via GPIOs de controle).
  */
 void AudioApp_Init(void);
+
+/**
+ * @brief Inicia o fluxo de áudio real no hardware.
+ *
+ * Ordem estrita:
+ * 1. Dispara o DMA (RX e TX) via HAL.
+ * 2. Libera os Codecs para operação (desliga Mute/Standby).
+ */
+void AudioApp_Start(void);
+
+/**
+ * @brief Alterna dinamicamente entre passthrough limpo e DSP ativo.
+ *
+ * @param mode Modo de pipeline desejado.
+ */
+void AudioApp_SetPipelineMode(AudioPipelineMode mode);
 
 /**
  * @brief Função não bloqueante para ser chamada no superloop (while 1 do main.c).

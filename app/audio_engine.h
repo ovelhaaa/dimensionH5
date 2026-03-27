@@ -16,6 +16,20 @@
  */
 
 /**
+ * @brief Modos de operação do pipeline de áudio.
+ */
+typedef enum {
+    AUDIO_PIPELINE_PASSTHROUGH = 0, /* ADC -> DMA RX -> DMA TX -> DAC puro (sem DSP) */
+    AUDIO_PIPELINE_DSP              /* ADC -> DMA RX -> Processamento DSP -> DMA TX -> DAC */
+} AudioPipelineMode;
+
+/**
+ * @brief Seleciona o modo de operação do pipeline (Passthrough ou DSP).
+ * @param mode Modo do pipeline desejado.
+ */
+void AudioEngine_SetPipelineMode(AudioPipelineMode mode);
+
+/**
  * @brief Inicializa o DSP do Dimension Chorus e zera buffers intermediários.
  */
 void AudioEngine_Init(void);
