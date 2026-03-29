@@ -242,7 +242,12 @@ int main() {
     }
 
     float* inMono = (float*)malloc(TOTAL_FRAMES * sizeof(float));
-    if (!inMono) return 1;
+    if (!inMono) {
+        if (reportFile) {
+            fclose(reportFile);
+        }
+        return 1;
+    }
 
     generate_sine(inMono, TOTAL_FRAMES, 440.0f);
     render_test_signal("sine440", inMono, TOTAL_FRAMES, reportFile);
