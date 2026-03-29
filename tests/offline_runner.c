@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "core/dimension_chorus.h"
+#include "core/dsp_common.h"
 
 // Um gerador pseudo-aleatório simples para o runner offline
 // em caso de não termos um arquivo WAV disponivel. O objetivo
 // deste runner agora é simular o laço contínuo do hardware e gerar um log.
 
-#define SAMPLE_RATE 48000
-#define BLOCK_SIZE 32
+#define SAMPLE_RATE ((int)DSP_SAMPLE_RATE)
+#define BLOCK_SIZE DSP_BLOCK_SIZE
 #define TOTAL_BLOCKS 100 // Processar equivalente a pequenos ms
 
 int main() {

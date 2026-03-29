@@ -3,9 +3,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include "core/dimension_chorus.h"
+#include "core/dsp_common.h"
 
-#define SAMPLE_RATE 48000
-#define BLOCK_SIZE 32
+#define SAMPLE_RATE ((int)DSP_SAMPLE_RATE)
+#define BLOCK_SIZE DSP_BLOCK_SIZE
 #define DURATION_SEC 2
 
 // Funcoes auxiliares para os testes
