@@ -12,6 +12,7 @@
 #define M_PI_F 3.14159265f
 #define TEST_FREQ_1KHZ 1000.0f
 #define TEST_FREQ_100HZ 100.0f
+#define MONO_SUM_RMS_THRESHOLD 0.1f
 
 // Funcoes auxiliares para os testes
 int compare_float(float a, float b, float epsilon) {
@@ -106,7 +107,7 @@ int test_mono_summing() {
 
     float rms = sqrtf(rms_sum / BLOCK_SIZE);
 
-    if (rms > 0.1f) {
+    if (rms > MONO_SUM_RMS_THRESHOLD) {
         printf("  [OK] Energia retida apos soma mono (RMS: %f). Fases do grave cruzadas com sucesso!\n", rms);
         return 0;
     } else {
