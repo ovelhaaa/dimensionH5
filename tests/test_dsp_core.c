@@ -4,15 +4,14 @@
 #include <math.h>
 #include "core/dimension_chorus.h"
 #include "core/dsp_common.h"
-
-#define SAMPLE_RATE ((int)DSP_SAMPLE_RATE)
-#define BLOCK_SIZE DSP_BLOCK_SIZE
-#define DURATION_SEC 2
+#include "test_signals.h"
 
 #define M_PI_F 3.14159265f
 #define TEST_FREQ_1KHZ 1000.0f
 #define TEST_FREQ_100HZ 100.0f
-#define MONO_SUM_RMS_THRESHOLD 0.1f
+
+// Tolerância para -6dB de perda de energia RMS no summing mono.
+#define MONO_SUM_ATTENUATION_THRESHOLD 0.5f
 
 // Funcoes auxiliares para os testes
 int compare_float(float a, float b, float epsilon) {
@@ -24,23 +23,64 @@ int test_impulse_response() {
     printf("Running Impulse Response Test...\n");
     DimensionChorusState chorus;
     DimensionChorus_Init(&chorus);
-    DimensionChorus_SetMode(&chorus, 0); // Ativa o modo 0 para testar taps
+    DimensionChorus_SetMode(&chorus, 0); // Ativa o modo 1 (índice 0)
 
-    float inMono[BLOCK_SIZE] = {0.0f};
-    float outStereo[BLOCK_SIZE * 2] = {0.0f};
+    // Forçar targets para os atuais para não haver rampa do smoothing nos testes
+    chorus.rate = chorus.targetRate;
+    chorus.baseMs = chorus.targetBaseMs;
+    chorus.depth = chorus.targetDepth;
+    chorus.mainW = chorus.targetMainW;
+    chorus.crossW = chorus.targetCrossW;
+
+    // Precisamos de um bloco maior para ver o tap de delay sair.
+    // baseMs do Mode 1 = 10.5ms = 504 samples em 48kHz.
+    // Vamos processar 1024 frames.
+    const size_t test_frames = 1024;
+    float* inMono = (float*)calloc(test_frames, sizeof(float));
+    float* outWet1 = (float*)calloc(test_frames, sizeof(float));
+    float* outWet2 = (float*)calloc(test_frames, sizeof(float));
 
     // Impulse no primeiro frame do primeiro bloco
     inMono[0] = 1.0f;
 
-    // Processa um bloco (Mono-In, Interleaved Stereo-Out)
-    DimensionChorus_ProcessBlock(&chorus, inMono, outStereo, BLOCK_SIZE);
+    size_t frames_processed = 0;
+    while(frames_processed < test_frames) {
+        size_t frames_to_process = DSP_BLOCK_SIZE;
+        DimensionChorus_ProcessBlock_Inspect(&chorus,
+            &inMono[frames_processed],
+            NULL, // outStereo not needed here
+            NULL, // outDry not needed
+            &outWet1[frames_processed],
+            &outWet2[frames_processed],
+            NULL, // monoSum
+            frames_to_process);
+        frames_processed += frames_to_process;
+    }
 
-    // O primeiro frame Left (índice 0) deve conter o dry signal
-    if(outStereo[0] != 0.0f) {
-        printf("  [OK] Impulse processado com dry/wet handling\n");
+    // Achar o pico em outWet1
+    float peak_val = 0.0f;
+    size_t peak_idx = 0;
+    for (size_t i = 0; i < test_frames; i++) {
+        if (fabsf(outWet1[i]) > peak_val) {
+            peak_val = fabsf(outWet1[i]);
+            peak_idx = i;
+        }
+    }
+
+    // Calcula tempo do delay alvo inicial: baseMs
+    float expected_delay_samps = chorus.baseMs * (DSP_SAMPLE_RATE / 1000.0f);
+
+    free(inMono);
+    free(outWet1);
+    free(outWet2);
+
+    // Permitimos margem pois há filtros que "espalham" o impulso,
+    // e modulador que pode mudar levemente o offset inicial se a fase LFO rodar
+    if (peak_idx > 0 && abs((int)peak_idx - (int)expected_delay_samps) < 10) {
+        printf("  [OK] Impulse delay verificado no Wet (Pico no tap: %zu, Esperado: ~%.1f)\n", peak_idx, expected_delay_samps);
         return 0;
     } else {
-        printf("  [FAIL] Sem sinal na saida.\n");
+        printf("  [FAIL] Falha no teste de timing. Pico tap em %zu (Esperado ~%.1f)\n", peak_idx, expected_delay_samps);
         return 1;
     }
 }
@@ -52,29 +92,46 @@ int test_headroom_clipping() {
     DimensionChorus_Init(&chorus);
     DimensionChorus_SetMode(&chorus, 1);
 
-    float inMono[BLOCK_SIZE];
-    float outStereo[BLOCK_SIZE * 2];
+    const size_t test_frames = DSP_BLOCK_SIZE * 4;
+    float inMono[test_frames];
+    float outStereo[test_frames * 2];
 
     // Injeta senoidal 1kHz @ 48kHz SR em full scale 1.0f
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        float val = sinf(2.0f * M_PI_F * TEST_FREQ_1KHZ * (float)i / SAMPLE_RATE);
-        inMono[i] = val;
+    generate_sine(inMono, test_frames, TEST_FREQ_1KHZ, DSP_SAMPLE_RATE);
+
+    // Escala abusivamente para +6dB para forçar a saturação testada
+    for (size_t i = 0; i < test_frames; i++) {
+        inMono[i] *= 2.0f;
     }
 
-    DimensionChorus_ProcessBlock(&chorus, inMono, outStereo, BLOCK_SIZE);
+    size_t frames_processed = 0;
+    while (frames_processed < test_frames) {
+        DimensionChorus_ProcessBlock(&chorus, &inMono[frames_processed], &outStereo[frames_processed * 2], DSP_BLOCK_SIZE);
+        frames_processed += DSP_BLOCK_SIZE;
+    }
 
-    int clipped = 0;
-    for (int i = 0; i < BLOCK_SIZE * 2; i++) {
-        if (outStereo[i] > 1.0f || outStereo[i] < -1.0f) {
-            clipped = 1;
+    int clipped_badly = 0;
+    float max_peak = 0.0f;
+
+    // Conforme dsp_math.h, Dsp_SoftClip trava as mantissas em +/- 0.666666667f para entradas >= 1.0
+    // Vamos garantir que nenhum output excede ~0.6667f.
+    const float soft_clip_max = 0.6667f;
+
+    for (size_t i = 0; i < test_frames * 2; i++) {
+        float abs_val = fabsf(outStereo[i]);
+        if (abs_val > max_peak) max_peak = abs_val;
+
+        // Usamos epsilon minúsculo para a checagem
+        if (abs_val > soft_clip_max + 1e-4f) {
+            clipped_badly = 1;
         }
     }
 
-    if (!clipped) {
-         printf("  [OK] Valores dentro de range float seguro (-1.0 a 1.0)\n");
+    if (!clipped_badly && max_peak > 0.6f) {
+         printf("  [OK] Sinais contidos no limitador da matriz com sucesso (Max: %f)\n", max_peak);
          return 0;
     } else {
-         printf("  [FAIL] Detectado hard clipping float! Reveja os ganhos internos da matriz.\n");
+         printf("  [FAIL] Detectada anomalia de headroom! Pico medido: %f\n", max_peak);
          return 1;
     }
 }
@@ -86,32 +143,44 @@ int test_mono_summing() {
     DimensionChorus_Init(&chorus);
     DimensionChorus_SetMode(&chorus, 3); // O modo 3 usa modulações mais intensas
 
-    float inMono[BLOCK_SIZE];
-    float outStereo[BLOCK_SIZE * 2];
+    const size_t test_frames = 4800; // 100ms de sinal para análise em vez de só 1 block
+    float* inMono = (float*)malloc(test_frames * sizeof(float));
+    float* outStereo = (float*)malloc(test_frames * 2 * sizeof(float));
 
     // Injeta onda para simular baixo e checar perda de grave
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-         float val = sinf(2.0f * M_PI_F * TEST_FREQ_100HZ * (float)i / SAMPLE_RATE); // 100 Hz
-         inMono[i] = val;
+    generate_sine(inMono, test_frames, TEST_FREQ_100HZ, DSP_SAMPLE_RATE);
+
+    size_t frames_processed = 0;
+    while(frames_processed < test_frames) {
+        DimensionChorus_ProcessBlock(&chorus, &inMono[frames_processed], &outStereo[frames_processed * 2], DSP_BLOCK_SIZE);
+        frames_processed += DSP_BLOCK_SIZE;
     }
 
-    DimensionChorus_ProcessBlock(&chorus, inMono, outStereo, BLOCK_SIZE);
+    float rms_sum_mono = 0.0f;
+    float rms_sum_dry = 0.0f;
 
-    float rms_sum = 0.0f;
-    for (int i = 0; i < BLOCK_SIZE; i++) {
+    for (size_t i = 0; i < test_frames; i++) {
         float left = outStereo[i * 2];
         float right = outStereo[i * 2 + 1];
         float mono_mix = (left + right) * 0.5f;
-        rms_sum += (mono_mix * mono_mix);
+        rms_sum_mono += (mono_mix * mono_mix);
+
+        float dry = inMono[i]; // Pegando apenas como referência de ganho inicial
+        rms_sum_dry += (dry * dry);
     }
 
-    float rms = sqrtf(rms_sum / BLOCK_SIZE);
+    float rms_mono = sqrtf(rms_sum_mono / test_frames);
+    float rms_dry = sqrtf(rms_sum_dry / test_frames);
 
-    if (rms > MONO_SUM_RMS_THRESHOLD) {
-        printf("  [OK] Energia retida apos soma mono (RMS: %f). Fases do grave cruzadas com sucesso!\n", rms);
+    free(inMono);
+    free(outStereo);
+
+    // Validar se perda ao fazer downmix não extingue mais de -6dB (limiar de 0.5) comparado à potência que entrou
+    if (rms_mono > (rms_dry * MONO_SUM_ATTENUATION_THRESHOLD)) {
+        printf("  [OK] Energia retida apos soma mono (RMS Mono: %f, Dry: %f).\n", rms_mono, rms_dry);
         return 0;
     } else {
-        printf("  [FAIL] Cancelamento de fase excessivo no mono (RMS: %f).\n", rms);
+        printf("  [FAIL] Cancelamento de fase excessivo no mono (RMS Mono: %f, Dry: %f).\n", rms_mono, rms_dry);
         return 1;
     }
 }
