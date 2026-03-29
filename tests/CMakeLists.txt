@@ -15,7 +15,7 @@ add_executable(test_audio_engine test_main.c test_audio_engine.c)
 target_link_libraries(test_audio_engine PRIVATE dimension_core)
 add_test(NAME audio_engine_tests COMMAND test_audio_engine)
 
-# WAV Renderer Executable
-add_executable(render_wav render_wav_main.c wav_writer.c)
-target_link_libraries(render_wav PRIVATE dimension_core)
-add_test(NAME render_wav_smoke_test COMMAND render_wav)
+# WAV Renderer Executable (Offline Runner)
+add_executable(offline_runner offline_runner.c wav_writer.c)
+target_link_libraries(offline_runner PRIVATE dimension_core)
+add_test(NAME offline_runner_smoke_test COMMAND offline_runner)
