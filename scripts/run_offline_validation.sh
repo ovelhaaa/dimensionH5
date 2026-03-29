@@ -20,8 +20,10 @@ ctest --output-on-failure
 
 echo "Running offline WAV renderer..."
 # offline_runner executable generates the WAV files directly into tests/output/
-./tests/offline_runner
+# We run it from the repo root so it can write to tests/output properly
+cd ..
+./build/tests/offline_runner
 
 echo "Validation complete. Artifacts saved in tests/output/"
-ls -lh ../tests/output/ | head -n 10
+ls -lh tests/output/ | head -n 10
 echo "... (truncated list)"
