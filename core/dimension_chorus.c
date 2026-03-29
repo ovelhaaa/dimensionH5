@@ -35,6 +35,8 @@ static inline void Dimension_UpdateControl(DimensionChorusState* s)
 
 void DimensionChorus_Init(DimensionChorusState* s)
 {
+    _Static_assert((DELAY_BUFFER_SIZE & (DELAY_BUFFER_SIZE - 1)) == 0, "DELAY_BUFFER_SIZE must be a power of 2");
+
     // Clear buffer
     memset(s->delayBuffer, 0, sizeof(s->delayBuffer));
     s->writeIndex = 0;
@@ -147,8 +149,9 @@ void DimensionChorus_ProcessBlock(
         // Handling negative float values correctly before truncation in Dsp_ReadHermite.
         // While bitwise masking in Hermite handles integers well, shifting the float
         // ensures the fractional part remains correctly oriented (positive fractional distance).
-        if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
-        if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
+        // Using branchless ternary operator to avoid branch prediction misses.
+        readPos1 += (readPos1 < 0.0f) ? (float)DELAY_BUFFER_SIZE : 0.0f;
+        readPos2 += (readPos2 < 0.0f) ? (float)DELAY_BUFFER_SIZE : 0.0f;
 
         // 3. Hermite Interpolated Read
         float wet1 = Dsp_ReadHermite(s->delayBuffer, readPos1);
@@ -227,8 +230,8 @@ void DimensionChorus_ProcessBlock_Inspect(
         float readPos1 = (float)wIdx - tapTime1;
         float readPos2 = (float)wIdx - tapTime2;
 
-        if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
-        if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
+        readPos1 += (readPos1 < 0.0f) ? (float)DELAY_BUFFER_SIZE : 0.0f;
+        readPos2 += (readPos2 < 0.0f) ? (float)DELAY_BUFFER_SIZE : 0.0f;
 
         // 3. Hermite Interpolated Read
         float wet1 = Dsp_ReadHermite(s->delayBuffer, readPos1);
