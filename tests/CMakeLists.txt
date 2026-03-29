@@ -1,4 +1,5 @@
 # Test Executables
+# O target antigo test_dimension_core continua existindo para testes de estatos e inicialização
 add_executable(test_dimension_core test_main.c test_dimension_core.c)
 target_link_libraries(test_dimension_core PRIVATE dimension_core)
 add_test(NAME dimension_core_tests COMMAND test_dimension_core)
@@ -26,7 +27,6 @@ target_link_libraries(offline_runner PRIVATE dimension_core)
 add_test(NAME offline_runner_smoke_test COMMAND offline_runner)
 
 # Nova Suite de Testes do Core DSP
-# Renomeando test_dimension_core antigo para test_dsp_core
 add_executable(test_dsp_core test_dsp_core.c)
 target_link_libraries(test_dsp_core PRIVATE dimension_core)
 add_test(NAME dsp_core_mathematical_tests COMMAND test_dsp_core)
