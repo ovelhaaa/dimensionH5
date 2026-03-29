@@ -87,7 +87,7 @@ dimensionH5/
   - Configurar CubeMX (Clocks, SAI/I2S, DMA).
   - Executar passthrough limpo e verificar alinhamento com osciloscópio (sem rodar código DSP).
   - Parametrizar a MPU para o D-Cache lidar graciosamente com buffers DMA.
-  - Ativar o DSP Mode e rodar medição com GPIO toggle p/ perfilar latência em tempo real e folga na CPU.
+  - Ativar o DSP Mode e rodar medição com GPIO toggle para perfilar latência em tempo real e folga na CPU.
 
 - **Fase 4: Refinamento Sonoro (Semana 4)**
   - Com o hardware montado e injetando som, reavaliar Ganhos e Filtros. Ajustar ganhos de base (`dryGain`, main, cross).
