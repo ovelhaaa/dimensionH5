@@ -28,7 +28,7 @@ jobs:
         run: ctest --output-on-failure
 
       - name: Run Offline Renderer
-        run: ./build/tests/render_wav
+        run: ./build/tests/offline_runner --batch
 
       - name: Upload CTest Results
         uses: actions/upload-artifact@v4
