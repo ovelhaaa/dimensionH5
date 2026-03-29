@@ -9,6 +9,10 @@
 #define BLOCK_SIZE DSP_BLOCK_SIZE
 #define DURATION_SEC 2
 
+#define M_PI_F 3.14159265f
+#define TEST_FREQ_1KHZ 1000.0f
+#define TEST_FREQ_100HZ 100.0f
+
 // Funcoes auxiliares para os testes
 int compare_float(float a, float b, float epsilon) {
     return fabsf(a - b) < epsilon;
@@ -52,7 +56,7 @@ int test_headroom_clipping() {
 
     // Injeta senoidal 1kHz @ 48kHz SR em full scale 1.0f
     for (int i = 0; i < BLOCK_SIZE; i++) {
-        float val = sinf(2.0f * 3.14159265f * 1000.0f * (float)i / SAMPLE_RATE);
+        float val = sinf(2.0f * M_PI_F * TEST_FREQ_1KHZ * (float)i / SAMPLE_RATE);
         inMono[i] = val;
     }
 
@@ -86,7 +90,7 @@ int test_mono_summing() {
 
     // Injeta onda para simular baixo e checar perda de grave
     for (int i = 0; i < BLOCK_SIZE; i++) {
-         float val = sinf(2.0f * 3.14159265f * 100.0f * (float)i / SAMPLE_RATE); // 100 Hz
+         float val = sinf(2.0f * M_PI_F * TEST_FREQ_100HZ * (float)i / SAMPLE_RATE); // 100 Hz
          inMono[i] = val;
     }
 
