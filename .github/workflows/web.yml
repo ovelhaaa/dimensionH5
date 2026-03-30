@@ -1,0 +1,56 @@
+name: Web WASM Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Build WASM
+        run: |
+          cd platform/web
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p public_html
+          cp platform/web/index.html public_html/
+          cp platform/web/main.js public_html/
+          cp platform/web/worklet.js public_html/
+          cp -r platform/web/dist public_html/dist
+          # Add fallback 404
+          cp platform/web/index.html public_html/404.html
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public_html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
