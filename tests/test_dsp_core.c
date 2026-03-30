@@ -89,7 +89,7 @@ int test_impulse_response() {
 
     // Permitimos margem pois há filtros que "espalham" o impulso,
     // e modulador que pode mudar levemente o offset inicial se a fase LFO rodar
-    if (peak_idx > 0 && abs((int)peak_idx - (int)expected_delay_samps) < IMPULSE_TIMING_MARGIN_SAMPLES) {
+    if (peak_idx > 0 && fabsf((float)peak_idx - expected_delay_samps) < (float)IMPULSE_TIMING_MARGIN_SAMPLES) {
         printf("  [OK] Impulse delay verificado no Wet (Pico no tap: %zu, Esperado: ~%.1f)\n", peak_idx, expected_delay_samps);
         return 0;
     } else {
