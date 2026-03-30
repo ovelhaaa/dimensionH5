@@ -80,10 +80,12 @@ function handleFileUpload(event) {
 
     uploadError.style.display = 'none';
 
-    // Disable buttons during load
+    // Disable buttons and input during load
+    audioUpload.disabled = true;
     playOrigBtn.disabled = true;
     playProcBtn.disabled = true;
     stopBtn.disabled = true;
+    decodedBuffer = null;
 
     fileInfo.style.display = 'block';
     fileNameDisplay.innerText = `Loading: ${file.name}...`;
