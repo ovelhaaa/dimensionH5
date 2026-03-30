@@ -126,9 +126,13 @@ function handleFileUpload(event) {
 
 function stopAudio() {
     if (currentSource) {
-        currentSource.stop();
+        try { currentSource.stop(); } catch (e) {} // Prevent crash if already stopped
         currentSource.disconnect();
         currentSource = null;
+    }
+    if (currentDownmixer) {
+        currentDownmixer.disconnect();
+        currentDownmixer = null;
     }
     isPlaying = false;
     stopBtn.disabled = true;
