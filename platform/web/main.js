@@ -53,6 +53,129 @@ function setMode(mode) {
     }
 }
 
+// Audio file playback state
+let decodedBuffer = null;
+let currentSource = null;
+let isPlaying = false;
+
+// UI Elements
+const audioUpload = document.getElementById('audio-upload');
+const playOrigBtn = document.getElementById('play-orig-btn');
+const playProcBtn = document.getElementById('play-proc-btn');
+const stopBtn = document.getElementById('stop-btn');
+const fileInfo = document.getElementById('file-info');
+const fileNameDisplay = document.getElementById('file-name');
+const fileDetailsDisplay = document.getElementById('file-details');
+const uploadError = document.getElementById('upload-error');
+
+function handleFileUpload(event) {
+    if (!audioContext) {
+        uploadError.innerText = 'Please click "Power On" first.';
+        uploadError.style.display = 'block';
+        return;
+    }
+
+    const file = event.target.files[0];
+    if (!file) return;
+
+    uploadError.style.display = 'none';
+
+    // Disable buttons during load
+    playOrigBtn.disabled = true;
+    playProcBtn.disabled = true;
+    stopBtn.disabled = true;
+
+    fileInfo.style.display = 'block';
+    fileNameDisplay.innerText = `Loading: ${file.name}...`;
+    fileDetailsDisplay.innerText = '';
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const arrayBuffer = e.target.result;
+            // Decode the audio data
+            decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            // Enable playback buttons
+            playOrigBtn.disabled = false;
+            playProcBtn.disabled = false;
+
+            // Display info
+            fileNameDisplay.innerText = `File: ${file.name}`;
+            const durationSec = decodedBuffer.duration.toFixed(2);
+            fileDetailsDisplay.innerText = `${decodedBuffer.sampleRate} Hz | ${decodedBuffer.numberOfChannels} ch | ${durationSec}s`;
+
+        } catch (error) {
+            console.error('Error decoding audio:', error);
+            uploadError.innerText = `Failed to decode audio. Format might not be supported.`;
+            uploadError.style.display = 'block';
+            fileNameDisplay.innerText = '';
+            fileInfo.style.display = 'none';
+        }
+    };
+
+    reader.onerror = () => {
+        uploadError.innerText = 'Failed to read file.';
+        uploadError.style.display = 'block';
+    };
+
+    // Check if the file is an mp3. Depending on the browser, some don't support mp3 in Web Audio API decodeAudioData out of the box.
+    // However, most modern browsers do. If this fails, the catch block above will show an error.
+    reader.readAsArrayBuffer(file);
+}
+
+function stopAudio() {
+    if (currentSource) {
+        currentSource.stop();
+        currentSource.disconnect();
+        currentSource = null;
+    }
+    isPlaying = false;
+    stopBtn.disabled = true;
+    playOrigBtn.style.opacity = '1';
+    playProcBtn.style.opacity = '1';
+}
+
+function playBuffer(processAudio) {
+    if (!audioContext || !decodedBuffer) return;
+
+    stopAudio(); // Stop currently playing audio if any
+
+    currentSource = audioContext.createBufferSource();
+    currentSource.buffer = decodedBuffer;
+
+    if (processAudio && chorusNode) {
+        // We use a GainNode to explicitly downmix to mono if the input is stereo
+        // because the hardware / Dimension Chorus DSP expects a mono input signal.
+        // It processes the mono input and generates a stereo output.
+        const downmixer = audioContext.createGain();
+        downmixer.channelCount = 1;
+        downmixer.channelCountMode = 'explicit';
+
+        currentSource.connect(downmixer);
+        downmixer.connect(chorusNode);
+
+        playProcBtn.style.opacity = '0.5';
+    } else {
+        // Original - connect directly to destination
+        currentSource.connect(audioContext.destination);
+        playOrigBtn.style.opacity = '0.5';
+    }
+
+    currentSource.onended = () => {
+        stopAudio();
+    };
+
+    currentSource.start(0);
+    isPlaying = true;
+    stopBtn.disabled = false;
+}
+
+audioUpload.addEventListener('change', handleFileUpload);
+playOrigBtn.addEventListener('click', () => playBuffer(false));
+playProcBtn.addEventListener('click', () => playBuffer(true));
+stopBtn.addEventListener('click', stopAudio);
+
 // Simple test sine wave player
 let oscillator;
 function toggleOscillator() {
@@ -62,7 +185,7 @@ function toggleOscillator() {
         oscillator.stop();
         oscillator.disconnect();
         oscillator = null;
-        document.getElementById('play-btn').innerText = 'Play Test Tone';
+        document.getElementById('play-btn').innerText = 'Debug: Test Tone (A4)';
         return;
     }
 
