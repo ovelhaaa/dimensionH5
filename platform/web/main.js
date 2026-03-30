@@ -99,8 +99,10 @@ function handleFileUpload(event) {
             decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
             // Enable playback buttons
+            // Enable playback buttons and input
             playOrigBtn.disabled = false;
             playProcBtn.disabled = false;
+            audioUpload.disabled = false;
 
             // Display info
             fileNameDisplay.innerText = `File: ${file.name}`;
