@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dimension Chorus Web Demo</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            text-align: center;
+            padding: 2rem;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .hardware-container {
+            /* Styling inspired by the classic Boss DC-2 Dimension C and Roland SDD-320 Dimension D */
+            background: linear-gradient(135deg, #7b68ee 0%, #483d8b 100%);
+            padding: 3rem;
+            border-radius: 12px;
+            box-shadow:
+                0 20px 50px rgba(0,0,0,0.5),
+                inset 0 2px 4px rgba(255,255,255,0.3),
+                inset 0 -5px 15px rgba(0,0,0,0.4);
+            display: inline-block;
+            max-width: 600px;
+            width: 100%;
+            position: relative;
+            border: 2px solid #2a2a2a;
+        }
+
+        h1 {
+            color: #ffffff;
+            font-size: 2.5rem;
+            margin-top: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            color: #dcdcdc;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            font-style: italic;
+        }
+
+        .controls {
+            margin-top: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: rgba(0,0,0,0.2);
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        button {
+            padding: 0.8rem 1.5rem;
+            margin: 1rem 0;
+            border: none;
+            border-radius: 4px;
+            background-color: #2c2c2c;
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #3c3c3c;
+            transform: translateY(-1px);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        button:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Dimension 4-Button Array Styling */
+        .mode-buttons-container {
+            margin-top: 1.5rem;
+        }
+
+        .mode-label {
+            font-weight: bold;
+            margin-bottom: 1rem;
+            display: block;
+            color: #ffffff;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 0.8rem;
+            justify-content: center;
+        }
+
+        .radio-group input[type="radio"] {
+            display: none;
+        }
+
+        .radio-group label {
+            cursor: pointer;
+            width: 50px;
+            height: 30px;
+            background: linear-gradient(to bottom, #dcdcdc 0%, #a9a9a9 100%);
+            border-radius: 3px;
+            color: #333;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+                0 4px 0 #555,
+                0 5px 5px rgba(0,0,0,0.4),
+                inset 0 1px 1px rgba(255,255,255,0.8);
+            transition: all 0.1s;
+            position: relative;
+        }
+
+        .radio-group input[type="radio"]:checked + label {
+            /* Pressed state */
+            background: linear-gradient(to bottom, #888 0%, #666 100%);
+            box-shadow:
+                0 1px 0 #333,
+                0 2px 2px rgba(0,0,0,0.4),
+                inset 0 2px 4px rgba(0,0,0,0.5);
+            transform: translateY(3px);
+            color: #fff;
+        }
+
+        /* Red LED indicator for active mode */
+        .radio-group label::before {
+            content: '';
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #330000;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+            transition: all 0.2s;
+        }
+
+        .radio-group input[type="radio"]:checked + label::before {
+            background-color: #ff3333;
+            box-shadow:
+                0 0 5px #ff3333,
+                0 0 10px #ff0000,
+                inset 0 1px 2px rgba(255,255,255,0.5);
+        }
+
+
+        #status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #e0e0e0;
+            font-weight: bold;
+            background-color: rgba(0,0,0,0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .instructions {
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: #aaaaaa;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+
+        .instructions a {
+            color: #8a2be2;
+            text-decoration: none;
+        }
+
+        .instructions a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hardware-container">
+        <h1>DIMENSION CHORUS</h1>
+        <div class="subtitle">Based on the legendary Roland SDD-320 Dimension D & Boss DC-2</div>
+
+        <div>
+            <button id="start-btn">Power On (Init Audio)</button>
+            <br>
+            <span id="status">Status: Waiting for initialization...</span>
+        </div>
+
+        <div class="controls">
+            <button id="play-btn" disabled>Play Test Tone (A4)</button>
+
+            <div class="mode-buttons-container">
+                <span class="mode-label">MODE</span>
+                <div class="radio-group" id="mode-selector">
+                    <input type="radio" id="mode0" name="mode" value="0">
+                    <label for="mode0">1</label>
+
+                    <input type="radio" id="mode1" name="mode" value="1" checked>
+                    <label for="mode1">2</label>
+
+                    <input type="radio" id="mode2" name="mode" value="2">
+                    <label for="mode2">3</label>
+
+                    <input type="radio" id="mode3" name="mode" value="3">
+                    <label for="mode3">4</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <p>This demo uses WebAssembly to run the exact same C DSP core that powers the <a href="https://github.com/the-pedal-project/dimensionH5" target="_blank">STM32H5 microcontroller version</a>.</p>
+        <p>No browser tricks, no rewritten logic. True embedded code running in your browser.</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="main.js" type="module"></script>
+
+</body>
+</html>
