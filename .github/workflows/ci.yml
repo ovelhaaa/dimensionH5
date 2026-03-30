@@ -5,6 +5,24 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+  workflow_dispatch:
+    inputs:
+      sample_file:
+        description: 'Sample WAV file to process'
+        required: true
+        type: choice
+        default: 'default (synthetic signals)'
+        options:
+          - 'default (synthetic signals)'
+          - 'chords.wav'
+          - 'farran_ez-soft-indie-guitar-sample-456142.wav'
+          - 'freesound_community-cl_min_a1-91159 (1).wav'
+          - 'freesound_community-cl_min_a1-91159 (2).wav'
+          - 'freesound_community-cl_min_a1-91159.wav'
+          - 'freesound_community-electric-guitar-phrase-38142.wav'
+          - 'freesound_community-guitar-103460.wav'
+          - 'ncone-bgm-blues-guitar-loop-192099.wav'
+          - 'u_1aiqn32afi-clean-country-lick-bend-289052.wav'
 
 jobs:
   build-and-test:
@@ -28,7 +46,12 @@ jobs:
         run: ctest --output-on-failure
 
       - name: Run Offline Renderer
-        run: ./build/tests/offline_runner --batch
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.sample_file }}" != "default (synthetic signals)" ]; then
+            ./build/tests/offline_runner --batch --input="samples/${{ github.event.inputs.sample_file }}"
+          else
+            ./build/tests/offline_runner --batch
+          fi
 
       - name: Upload CTest Results
         uses: actions/upload-artifact@v4
