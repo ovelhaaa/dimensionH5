@@ -213,7 +213,24 @@
         </div>
 
         <div class="controls">
-            <button id="play-btn" disabled>Play Test Tone (A4)</button>
+            <div id="audio-player-controls" style="margin-bottom: 1rem; width: 100%; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+                <label class="mode-label" style="font-size: 0.9rem; margin-bottom: 0.5rem;">AUDIO INPUT</label>
+                <input type="file" id="audio-upload" accept=".wav,.mp3,audio/*" style="margin-bottom: 1rem; color: #fff; font-size: 0.8rem; max-width: 100%;">
+
+                <div id="file-info" style="font-size: 0.8rem; color: #aaa; margin-bottom: 1rem; display: none;">
+                    <span id="file-name"></span><br>
+                    <span id="file-details"></span>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+                    <button id="play-orig-btn" disabled style="font-size: 0.8rem; padding: 0.6rem 1rem;">Play Original</button>
+                    <button id="play-proc-btn" disabled style="font-size: 0.8rem; padding: 0.6rem 1rem; background-color: #8a2be2;">Play Processed</button>
+                    <button id="stop-btn" disabled style="font-size: 0.8rem; padding: 0.6rem 1rem; background-color: #aa3333;">Stop</button>
+                </div>
+                <div id="upload-error" style="color: #ff5555; font-size: 0.8rem; margin-top: 0.5rem; display: none;"></div>
+            </div>
+
+            <button id="play-btn" disabled style="font-size: 0.8rem; padding: 0.5rem 1rem; background-color: #444;">Debug: Test Tone (A4)</button>
 
             <div class="mode-buttons-container">
                 <span class="mode-label">MODE</span>
