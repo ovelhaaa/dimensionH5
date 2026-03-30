@@ -13,6 +13,20 @@
 // Tolerância para -6dB de perda de energia RMS no summing mono.
 #define MONO_SUM_ATTENUATION_THRESHOLD 0.5f
 
+// Parâmetros e limites nomeados para os testes
+#define IMPULSE_TEST_DURATION_MS 22.0f
+#define IMPULSE_TEST_FRAMES ((size_t)((IMPULSE_TEST_DURATION_MS / 1000.0f) * DSP_SAMPLE_RATE))
+#define IMPULSE_TIMING_MARGIN_SAMPLES 10
+
+#define HEADROOM_TEST_FRAMES (DSP_BLOCK_SIZE * 4)
+#define HEADROOM_OVERDRIVE_FACTOR 2.0f
+#define SOFT_CLIP_MAX_THRESHOLD 0.6667f
+#define SOFT_CLIP_EPSILON 1e-4f
+#define SOFT_CLIP_MIN_PEAK_THRESHOLD 0.6f
+
+#define MONO_SUM_TEST_DURATION_MS 100.0f
+#define MONO_SUM_TEST_FRAMES ((size_t)((MONO_SUM_TEST_DURATION_MS / 1000.0f) * DSP_SAMPLE_RATE))
+
 // Funcoes auxiliares para os testes
 int compare_float(float a, float b, float epsilon) {
     return fabsf(a - b) < epsilon;
@@ -34,8 +48,7 @@ int test_impulse_response() {
 
     // Precisamos de um bloco maior para ver o tap de delay sair.
     // baseMs do Mode 1 = 10.5ms = 504 samples em 48kHz.
-    // Vamos processar 1024 frames.
-    const size_t test_frames = 1024;
+    const size_t test_frames = IMPULSE_TEST_FRAMES;
     float* inMono = (float*)calloc(test_frames, sizeof(float));
     float* outWet1 = (float*)calloc(test_frames, sizeof(float));
     float* outWet2 = (float*)calloc(test_frames, sizeof(float));
@@ -76,7 +89,7 @@ int test_impulse_response() {
 
     // Permitimos margem pois há filtros que "espalham" o impulso,
     // e modulador que pode mudar levemente o offset inicial se a fase LFO rodar
-    if (peak_idx > 0 && abs((int)peak_idx - (int)expected_delay_samps) < 10) {
+    if (peak_idx > 0 && abs((int)peak_idx - (int)expected_delay_samps) < IMPULSE_TIMING_MARGIN_SAMPLES) {
         printf("  [OK] Impulse delay verificado no Wet (Pico no tap: %zu, Esperado: ~%.1f)\n", peak_idx, expected_delay_samps);
         return 0;
     } else {
@@ -92,16 +105,16 @@ int test_headroom_clipping() {
     DimensionChorus_Init(&chorus);
     DimensionChorus_SetMode(&chorus, 1);
 
-    const size_t test_frames = DSP_BLOCK_SIZE * 4;
-    float inMono[test_frames];
-    float outStereo[test_frames * 2];
+    const size_t test_frames = HEADROOM_TEST_FRAMES;
+    float inMono[HEADROOM_TEST_FRAMES];
+    float outStereo[HEADROOM_TEST_FRAMES * 2];
 
     // Injeta senoidal 1kHz @ 48kHz SR em full scale 1.0f
     generate_sine(inMono, test_frames, TEST_FREQ_1KHZ, DSP_SAMPLE_RATE);
 
     // Escala abusivamente para +6dB para forçar a saturação testada
     for (size_t i = 0; i < test_frames; i++) {
-        inMono[i] *= 2.0f;
+        inMono[i] *= HEADROOM_OVERDRIVE_FACTOR;
     }
 
     size_t frames_processed = 0;
@@ -113,21 +126,17 @@ int test_headroom_clipping() {
     int clipped_badly = 0;
     float max_peak = 0.0f;
 
-    // Conforme dsp_math.h, Dsp_SoftClip trava as mantissas em +/- 0.666666667f para entradas >= 1.0
-    // Vamos garantir que nenhum output excede ~0.6667f.
-    const float soft_clip_max = 0.6667f;
-
     for (size_t i = 0; i < test_frames * 2; i++) {
         float abs_val = fabsf(outStereo[i]);
         if (abs_val > max_peak) max_peak = abs_val;
 
         // Usamos epsilon minúsculo para a checagem
-        if (abs_val > soft_clip_max + 1e-4f) {
+        if (abs_val > SOFT_CLIP_MAX_THRESHOLD + SOFT_CLIP_EPSILON) {
             clipped_badly = 1;
         }
     }
 
-    if (!clipped_badly && max_peak > 0.6f) {
+    if (!clipped_badly && max_peak > SOFT_CLIP_MIN_PEAK_THRESHOLD) {
          printf("  [OK] Sinais contidos no limitador da matriz com sucesso (Max: %f)\n", max_peak);
          return 0;
     } else {
@@ -143,7 +152,7 @@ int test_mono_summing() {
     DimensionChorus_Init(&chorus);
     DimensionChorus_SetMode(&chorus, 3); // O modo 3 usa modulações mais intensas
 
-    const size_t test_frames = 4800; // 100ms de sinal para análise em vez de só 1 block
+    const size_t test_frames = MONO_SUM_TEST_FRAMES; // 100ms de sinal para análise
     float* inMono = (float*)malloc(test_frames * sizeof(float));
     float* outStereo = (float*)malloc(test_frames * 2 * sizeof(float));
 

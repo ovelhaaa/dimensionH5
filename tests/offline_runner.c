@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 #include "core/dimension_chorus.h"
 #include "core/dsp_common.h"
 #include "test_signals.h"
@@ -21,8 +22,6 @@ void write_mono_as_stereo(const char* filename, const float* monoBuffer, size_t 
 }
 
 void render_test(int mode, const char* signal_type, const float* inMono) {
-    printf("Rendering Mode %d with signal: %s...\n", mode + 1, signal_type);
-
     DimensionChorusState chorus;
     DimensionChorus_Init(&chorus);
     DimensionChorus_SetMode(&chorus, (DimensionMode)mode);
@@ -46,6 +45,21 @@ void render_test(int mode, const char* signal_type, const float* inMono) {
 
         frames_processed += block_frames;
     }
+
+    float max_peak_stereo = 0.0f;
+    for (size_t i = 0; i < TOTAL_FRAMES * 2; i++) {
+        float abs_val = fabsf(outStereo[i]);
+        if (abs_val > max_peak_stereo) max_peak_stereo = abs_val;
+    }
+
+    float max_peak_mono = 0.0f;
+    for (size_t i = 0; i < TOTAL_FRAMES; i++) {
+        float abs_val = fabsf(outMonoSum[i]);
+        if (abs_val > max_peak_mono) max_peak_mono = abs_val;
+    }
+
+    printf("[Mode %d | Signal: %s] Rendered. Max Peak: %.4f (Stereo), %.4f (Mono Sum)\n",
+           mode + 1, signal_type, max_peak_stereo, max_peak_mono);
 
     char filename[256];
     snprintf(filename, sizeof(filename), "tests/output/%s_mode_%d.wav", signal_type, mode + 1);
