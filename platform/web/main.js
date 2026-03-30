@@ -164,12 +164,12 @@ function playBuffer(processAudio) {
         // We use a GainNode to explicitly downmix to mono if the input is stereo
         // because the hardware / Dimension Chorus DSP expects a mono input signal.
         // It processes the mono input and generates a stereo output.
-        const downmixer = audioContext.createGain();
-        downmixer.channelCount = 1;
-        downmixer.channelCountMode = 'explicit';
+        currentDownmixer = audioContext.createGain();
+        currentDownmixer.channelCount = 1;
+        currentDownmixer.channelCountMode = 'explicit';
 
-        currentSource.connect(downmixer);
-        downmixer.connect(chorusNode);
+        currentSource.connect(currentDownmixer);
+        currentDownmixer.connect(chorusNode);
 
         playProcBtn.style.opacity = '0.5';
     } else {
