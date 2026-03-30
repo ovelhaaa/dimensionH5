@@ -57,6 +57,7 @@ function setMode(mode) {
 let decodedBuffer = null;
 let currentSource = null;
 let isPlaying = false;
+let currentDownmixer = null;
 
 // UI Elements
 const audioUpload = document.getElementById('audio-upload');
