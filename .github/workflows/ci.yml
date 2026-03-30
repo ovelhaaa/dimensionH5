@@ -15,6 +15,7 @@ on:
         options:
           - 'default (synthetic signals)'
           - 'chords.wav'
+          - 'chords_48k.wav'
           - 'farran_ez-soft-indie-guitar-sample-456142.wav'
           - 'freesound_community-cl_min_a1-91159 (1).wav'
           - 'freesound_community-cl_min_a1-91159 (2).wav'
