@@ -4,7 +4,7 @@ target_link_libraries(test_audio_engine PRIVATE dimension_core)
 add_test(NAME audio_engine_tests COMMAND test_audio_engine)
 
 # Offline Runner Executable
-add_executable(offline_runner offline_runner.c test_signals.c wav_writer.c)
+add_executable(offline_runner offline_runner.c test_signals.c wav_writer.c wav_reader.c)
 target_link_libraries(offline_runner PRIVATE dimension_core)
 add_test(NAME offline_runner_smoke_test COMMAND offline_runner)
 

@@ -32,7 +32,7 @@ O CTest roda testes rigorosos sobre o `core/` (DSP puro):
 
 O `offline_runner` processa sinais de teste completos em cada um dos modos do Dimension Chorus, salvando tanto o arquivo dry (seco) quanto as versões processadas estéreo e somadas em mono (para validar compatibilidade mono).
 
-### Uso Básico
+### Uso Básico (Sinais Sintéticos)
 
 Sempre execute o offline runner a partir da **raiz do repositório**:
 
@@ -40,11 +40,29 @@ Sempre execute o offline runner a partir da **raiz do repositório**:
 ./build/tests/offline_runner --batch
 ```
 
-O comando `--batch` vai renderizar sinais de `sine`, `sweep`, `impulse`, `noise` e `chord` em todos os 4 modos e salvá-los na pasta `tests/output/`.
+O comando `--batch` vai renderizar sinais sintéticos de `sine`, `sweep`, `impulse`, `noise` e `chord` em todos os 4 modos e salvá-los na pasta `tests/output/`.
 
 Se quiser testar apenas um modo específico com um sinal:
 ```bash
 ./build/tests/offline_runner --mode=3 --signal=sweep
+```
+
+### Processamento de WAVs do Usuário
+
+A ferramenta também suporta o processamento de arquivos de áudio externos para testes auditivos do mundo real.
+
+**Restrições:** O arquivo WAV deve ser obrigatoriamente 16-bit PCM com uma taxa de amostragem de 48kHz. Se o arquivo for estéreo, ele será automaticamente convertido para mono através de um downmix \((L+R)/2\) antes do processamento do DSP.
+
+Exemplos práticos:
+```bash
+# Processa um áudio de guitarra no modo 2 e salva na pasta padrão com o nome automático "custom_wav_mode_2.wav"
+./build/tests/offline_runner --input=guitar.wav --mode=2
+
+# Força o salvamento em um arquivo de saída específico e também gera um downmix mono (--mono-sum) do resultado
+./build/tests/offline_runner --input=guitar.wav --output=guitar_mode2.wav --mode=2 --mono-sum
+
+# Processa o arquivo externo em todos os 4 modos automaticamente
+./build/tests/offline_runner --input=guitar.wav --batch
 ```
 
 ### Interpretando Logs de Pico (Peak Amplitude)
