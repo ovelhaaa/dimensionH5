@@ -57,7 +57,6 @@ function setMode(mode) {
 let decodedBuffer = null;
 let currentSource = null;
 let isPlaying = false;
-let currentDownmixer = null;
 
 // UI Elements
 const audioUpload = document.getElementById('audio-upload');
@@ -140,12 +139,20 @@ function stopAudio() {
 function playBuffer(processAudio) {
     if (!audioContext || !decodedBuffer) return;
 
+    // Gate processed playback on chorusNode availability
+    if (processAudio && !chorusNode) {
+        uploadError.innerText = 'Audio processor is not ready yet. Please wait.';
+        uploadError.style.display = 'block';
+        return;
+    }
+
+    uploadError.style.display = 'none';
     stopAudio(); // Stop currently playing audio if any
 
     currentSource = audioContext.createBufferSource();
     currentSource.buffer = decodedBuffer;
 
-    if (processAudio && chorusNode) {
+    if (processAudio) {
         // We use a GainNode to explicitly downmix to mono if the input is stereo
         // because the hardware / Dimension Chorus DSP expects a mono input signal.
         // It processes the mono input and generates a stereo output.
