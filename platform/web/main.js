@@ -47,18 +47,30 @@ async function initAudio() {
     chorusNode.connect(audioContext.destination);
 }
 
+/**
+ * Instructs the chorus worklet to switch to a specific mode.
+ * @param {number|string} mode - Mode index to activate on the worklet (integer or numeric string). The message is sent only if the worklet node is available.
+ */
 function setMode(mode) {
     if (chorusNode) {
         chorusNode.port.postMessage({ type: 'setMode', mode: parseInt(mode, 10) });
     }
 }
 
+/**
+ * Update the worklet's selection mode (0 = Authentic: single mode, 1 = Combo: multiple modes).
+ * @param {number|string} selMode - Selection mode value (`0` for Authentic, `1` for Combo); will be parsed as an integer.
+ */
 function setSelectionMode(selMode) {
     if (chorusNode) {
         chorusNode.port.postMessage({ type: 'setSelectionMode', selMode: parseInt(selMode, 10) });
     }
 }
 
+/**
+ * Send an integer bitmask representing selected effect modes to the chorus worklet.
+ * @param {number|string} mask - Bitmask where each set bit corresponds to an enabled mode index; will be converted to an integer with base 10.
+ */
 function setModeMask(mask) {
     if (chorusNode) {
         chorusNode.port.postMessage({ type: 'setModeMask', mask: parseInt(mask, 10) });
@@ -408,6 +420,12 @@ selModeRadios.forEach(radio => {
 
 const modeCheckboxes = document.querySelectorAll('input[name="mode"]');
 
+/**
+ * Build and send a bitmask representing the currently checked mode checkboxes, and ensure at least one mode is selected.
+ *
+ * The mask is formed by OR-ing (1 << parseInt(cb.value, 10)) for each checked checkbox in `modeCheckboxes`.
+ * If no checkbox is checked, the first checkbox is re-checked and the mask is set to `1`. The final mask is sent to the worklet via `setModeMask(mask)`.
+ */
 function updateMask() {
     let mask = 0;
     modeCheckboxes.forEach(cb => {
