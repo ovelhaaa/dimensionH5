@@ -16,6 +16,10 @@ typedef struct {
     float delayBuffer[DELAY_BUFFER_SIZE];
     uint32_t writeIndex;
 
+    // Mode Selection State
+    DimensionSelectionMode selectionMode;
+    DimensionModeMask activeModeMask;
+
     // Target control parameters (for the chosen mode)
     float targetRate;
     float targetBaseMs;
@@ -64,6 +68,20 @@ void DimensionChorus_Reset(DimensionChorusState* s);
  * @param mode Target dimension mode (0-3).
  */
 void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode);
+
+/**
+ * @brief Sets the behavior mode (Authentic Single vs Expanded Combo).
+ * @param s State pointer.
+ * @param selMode Single or Combo.
+ */
+void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectionMode selMode);
+
+/**
+ * @brief Sets the active modes via a bitmask.
+ * @param s State pointer.
+ * @param mask Bitmask of active modes.
+ */
+void DimensionChorus_SetModeMask(DimensionChorusState* s, DimensionModeMask mask);
 
 /**
  * @brief Process an audio block. Mono in, Stereo out.

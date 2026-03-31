@@ -11,6 +11,31 @@ void dimension_init() {
 }
 
 EMSCRIPTEN_KEEPALIVE
+void dimension_set_selection_mode(int selMode) {
+    if (selMode != 0 && selMode != 1) {
+        selMode = 0; // fallback single
+    }
+    DimensionChorus_SetSelectionMode(&chorus, (DimensionSelectionMode)selMode);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void dimension_set_mode_mask(int mask) {
+    DimensionChorus_SetModeMask(&chorus, (DimensionModeMask)mask);
+}
+
+// Telemetry endpoints
+EMSCRIPTEN_KEEPALIVE
+float dimension_get_rate() { return chorus.targetRate; }
+EMSCRIPTEN_KEEPALIVE
+float dimension_get_depth() { return chorus.targetDepth; }
+EMSCRIPTEN_KEEPALIVE
+float dimension_get_base() { return chorus.targetBaseMs; }
+EMSCRIPTEN_KEEPALIVE
+float dimension_get_mainw() { return chorus.targetMainW; }
+EMSCRIPTEN_KEEPALIVE
+float dimension_get_crossw() { return chorus.targetCrossW; }
+
+EMSCRIPTEN_KEEPALIVE
 void dimension_set_mode(int mode) {
     if (mode < 0 || mode >= DIMENSION_MODE_COUNT) {
         mode = 0;

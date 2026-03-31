@@ -42,6 +42,10 @@ void DimensionChorus_Init(DimensionChorusState* s)
     // Fixed param
     s->dryGain = 0.88f;
 
+    // Set initial mode
+    s->selectionMode = DIMENSION_SELECTION_SINGLE;
+    s->activeModeMask = (1 << DIMENSION_MODE_1);
+
     // Default LFO Filter Coef for 2Hz cutoff at sampling rate 48k
     // a_lfo = 1 - e^(-2*pi*fc/fs)
     s->lfoCoef = 1.0f - expf(-2.0f * (float)M_PI * 2.0f / DSP_SAMPLE_RATE);
@@ -73,9 +77,9 @@ void DimensionChorus_Reset(DimensionChorusState* s)
     Dsp_BiquadInit(&s->wet2Lpf);
 }
 
-void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
+static void DimensionChorus_UpdateTargets(DimensionChorusState* s)
 {
-    DimensionModeParams params = DimensionMode_GetParams(mode);
+    DimensionModeParams params = DimensionMode_ResolveParams(s->selectionMode, s->activeModeMask);
 
     s->targetRate   = params.rateHz;
     s->targetBaseMs = params.baseMs;
@@ -83,13 +87,46 @@ void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
     s->targetMainW  = params.mainWet;
     s->targetCrossW = params.crossWet;
 
-    // Recalculate filters (they are fixed freq right now, but best practice
-    // to init them here on mode switch for future flexibility)
+    // In a more complex architecture, filters might shift based on mode combinations.
+    // For now, they remain fixed.
     Dsp_BiquadCalcHPF(&s->wet1Hpf, WET_HPF_FREQ, WET_HPF_Q);
     Dsp_BiquadCalcLPF(&s->wet1Lpf, WET_LPF_FREQ, WET_LPF_Q);
 
     Dsp_BiquadCalcHPF(&s->wet2Hpf, WET_HPF_FREQ, WET_HPF_Q);
     Dsp_BiquadCalcLPF(&s->wet2Lpf, WET_LPF_FREQ, WET_LPF_Q);
+}
+
+void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
+{
+    if (mode < 0 || mode >= DIMENSION_MODE_COUNT) {
+        mode = DIMENSION_MODE_1;
+    }
+
+    if (s->selectionMode == DIMENSION_SELECTION_SINGLE) {
+        s->activeModeMask = (1 << mode);
+    } else {
+        // Toggle behavior if in combo mode and called via legacy SetMode API
+        s->activeModeMask ^= (1 << mode);
+        // Ensure at least one mode is always selected
+        if (s->activeModeMask == 0) {
+            s->activeModeMask = (1 << mode);
+        }
+    }
+
+    DimensionChorus_UpdateTargets(s);
+}
+
+void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectionMode selMode)
+{
+    s->selectionMode = selMode;
+    DimensionChorus_UpdateTargets(s);
+}
+
+void DimensionChorus_SetModeMask(DimensionChorusState* s, DimensionModeMask mask)
+{
+    if (mask == 0) mask = (1 << DIMENSION_MODE_1);
+    s->activeModeMask = mask;
+    DimensionChorus_UpdateTargets(s);
 }
 
 void DimensionChorus_ProcessBlock(

@@ -18,16 +18,27 @@ class DimensionChorusWorklet extends AudioWorkletProcessor {
         // Message port listener
         this.port.onmessage = (event) => {
             const data = event.data;
+            if (!this.initialized && data.type !== 'init') return;
+
             if (data.type === 'init') {
                 this.initWasm(data.wasmBytes);
             } else if (data.type === 'setMode') {
-                if (this.initialized) {
-                    this.wasmModule._dimension_set_mode(data.mode);
-                }
+                this.wasmModule._dimension_set_mode(data.mode);
+            } else if (data.type === 'setSelectionMode') {
+                this.wasmModule._dimension_set_selection_mode(data.mode);
+            } else if (data.type === 'setModeMask') {
+                this.wasmModule._dimension_set_mode_mask(data.mask);
             } else if (data.type === 'reset') {
-                if (this.initialized) {
-                    this.wasmModule._dimension_reset();
-                }
+                this.wasmModule._dimension_reset();
+            } else if (data.type === 'getTelemetry') {
+                this.port.postMessage({
+                    type: 'telemetry',
+                    rate: this.wasmModule._dimension_get_rate(),
+                    depth: this.wasmModule._dimension_get_depth(),
+                    base: this.wasmModule._dimension_get_base(),
+                    mainW: this.wasmModule._dimension_get_mainw(),
+                    crossW: this.wasmModule._dimension_get_crossw()
+                });
             }
         };
     }

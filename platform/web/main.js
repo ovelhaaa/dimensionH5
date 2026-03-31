@@ -37,9 +37,22 @@ async function initAudio() {
             document.getElementById('status').innerText = 'Audio Engine Ready';
             document.getElementById('start-btn').disabled = true;
             document.getElementById('play-btn').disabled = false;
+
+            // Start telemetry polling
+            setInterval(() => {
+                if (chorusNode) {
+                    chorusNode.port.postMessage({ type: 'getTelemetry' });
+                }
+            }, 100);
+
+            // Force initial sync
+            updateBehaviorMode();
+
         } else if (e.data.type === 'error') {
             console.error('Worklet Error:', e.data.message);
             document.getElementById('status').innerText = 'Error: ' + e.data.message;
+        } else if (e.data.type === 'telemetry') {
+            updateTelemetryUI(e.data);
         }
     };
 
@@ -47,10 +60,92 @@ async function initAudio() {
     chorusNode.connect(audioContext.destination);
 }
 
-function setMode(mode) {
-    if (chorusNode) {
-        chorusNode.port.postMessage({ type: 'setMode', mode: parseInt(mode, 10) });
+// Global UI State
+let isComboMode = false;
+
+function updateTelemetryUI(data) {
+    document.getElementById('tel-rate').innerText = data.rate.toFixed(2) + ' Hz';
+    document.getElementById('tel-depth').innerText = data.depth.toFixed(2) + ' ms';
+    document.getElementById('tel-base').innerText = data.base.toFixed(2) + ' ms';
+    document.getElementById('tel-mainw').innerText = data.mainW.toFixed(2);
+    document.getElementById('tel-crossw').innerText = data.crossW.toFixed(2);
+}
+
+function syncModeStateToDSP() {
+    if (!chorusNode) return;
+
+    if (isComboMode) {
+        // Build bitmask from checkboxes
+        const checkboxes = document.querySelectorAll('input[name="mode"]');
+        let mask = 0;
+        checkboxes.forEach((cb, idx) => {
+            if (cb.checked) mask |= (1 << idx);
+        });
+
+        // Prevent all-off state in combo mode visually
+        if (mask === 0) {
+            mask = 1;
+            document.getElementById('mode0').checked = true;
+        }
+
+        chorusNode.port.postMessage({ type: 'setModeMask', mask: mask });
+    } else {
+        // Authentic mode: use standard setMode
+        const selected = document.querySelector('input[name="mode"]:checked');
+        if (selected) {
+            chorusNode.port.postMessage({ type: 'setMode', mode: parseInt(selected.value, 10) });
+        }
     }
+}
+
+function setMode(mode) {
+    // Handling click directly via syncModeStateToDSP on change event
+}
+
+function updateBehaviorMode() {
+    const selector = document.getElementById('behavior-mode');
+    const desc = document.getElementById('behavior-desc');
+    const modeInputs = document.querySelectorAll('input[name="mode"]');
+
+    isComboMode = (selector.value === "1");
+
+    if (isComboMode) {
+        desc.innerText = "Expanded behavior: Select multiple modes simultaneously.";
+        // Change inputs to checkboxes to allow multiple selections
+        modeInputs.forEach(input => {
+            input.type = 'checkbox';
+        });
+
+        // Ensure at least one is selected if we just switched to combo
+        const checked = document.querySelectorAll('input[name="mode"]:checked');
+        if (checked.length === 0) {
+            document.getElementById('mode0').checked = true;
+        }
+
+        if (chorusNode) {
+            chorusNode.port.postMessage({ type: 'setSelectionMode', mode: 1 /* COMBO */ });
+        }
+    } else {
+        desc.innerText = "Classic behavior: Only one mode active at a time.";
+
+        // Find highest selected to keep as the active radio button
+        let highestVal = 0;
+        modeInputs.forEach(input => {
+            if (input.checked) highestVal = Math.max(highestVal, parseInt(input.value, 10));
+        });
+
+        // Change inputs back to radio
+        modeInputs.forEach(input => {
+            input.type = 'radio';
+            input.checked = (parseInt(input.value, 10) === highestVal);
+        });
+
+        if (chorusNode) {
+            chorusNode.port.postMessage({ type: 'setSelectionMode', mode: 0 /* SINGLE */ });
+        }
+    }
+
+    syncModeStateToDSP();
 }
 
 // Audio file playback state
@@ -357,9 +452,11 @@ async function toggleOscillator() {
 // User interactions
 document.getElementById('start-btn').addEventListener('click', initAudio);
 
-const modeRadios = document.querySelectorAll('input[name="mode"]');
-modeRadios.forEach(radio => {
-    radio.addEventListener('change', (e) => setMode(e.target.value));
+const modeInputs = document.querySelectorAll('input[name="mode"]');
+modeInputs.forEach(input => {
+    input.addEventListener('change', syncModeStateToDSP);
 });
+
+document.getElementById('behavior-mode').addEventListener('change', updateBehaviorMode);
 
 document.getElementById('play-btn').addEventListener('click', toggleOscillator);

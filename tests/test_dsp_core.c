@@ -194,12 +194,58 @@ int test_mono_summing() {
     }
 }
 
+// 4. Combo Mode Parameters Resolution Test
+int test_combo_mode_params() {
+    printf("Running Combo Mode Parameter Resolution Test...\n");
+    DimensionChorusState chorus;
+    DimensionChorus_Init(&chorus);
+
+    // Set to combo mode
+    DimensionChorus_SetSelectionMode(&chorus, DIMENSION_SELECTION_COMBO);
+
+    // Test 1: Single bit active in combo mode should match single mode
+    DimensionChorus_SetModeMask(&chorus, (1 << DIMENSION_MODE_1));
+    if (!compare_float(chorus.targetRate, 0.18f, 0.01f)) {
+        printf("  [FAIL] Combo mode with single bit didn't match base rate. Got %f\n", chorus.targetRate);
+        return 1;
+    }
+
+    // Test 2: All bits active (1+2+3+4)
+    DimensionChorus_SetModeMask(&chorus, 0b1111);
+
+    // Average rate: (0.18 + 0.32 + 0.55 + 0.72) / 4 = 0.4425
+    float expected_rate = 0.4425f;
+    if (!compare_float(chorus.targetRate, expected_rate, 0.01f)) {
+        printf("  [FAIL] Combo mode rate avg failed. Expected ~%f, Got %f\n", expected_rate, chorus.targetRate);
+        return 1;
+    }
+
+    // Depth: sum(0.70 + 1.00 + 1.30 + 1.45) = 4.45 * 0.7 scale = 3.115
+    // But max allowed is Mode4 * 1.5 = 1.45 * 1.5 = 2.175. It should clamp!
+    float expected_depth = 2.175f;
+    if (!compare_float(chorus.targetDepth, expected_depth, 0.01f)) {
+        printf("  [FAIL] Combo mode depth clamp failed. Expected ~%f, Got %f\n", expected_depth, chorus.targetDepth);
+        return 1;
+    }
+
+    // Main wet: sum(0.20 + 0.26 + 0.32 + 0.36) = 1.14 * 0.6 = 0.684 -> clamped to 0.6
+    float expected_mainw = 0.6f;
+    if (!compare_float(chorus.targetMainW, expected_mainw, 0.01f)) {
+         printf("  [FAIL] Combo mode main wet clamp failed. Expected ~%f, Got %f\n", expected_mainw, chorus.targetMainW);
+         return 1;
+    }
+
+    printf("  [OK] Combo mode parameters scaled and clamped correctly.\n");
+    return 0;
+}
+
 int main() {
     printf("=== Dimension Chorus DSP Core Tests ===\n");
     int failures = 0;
     failures += test_impulse_response();
     failures += test_headroom_clipping();
     failures += test_mono_summing();
+    failures += test_combo_mode_params();
     printf("=======================================\n");
     printf("Tests Failed: %d\n", failures);
     return failures;

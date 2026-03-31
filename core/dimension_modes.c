@@ -1,4 +1,6 @@
 #include "dimension_modes.h"
+#include "dsp_math.h"
+#include <math.h>
 
 // Define the 4 preset modes.
 // Fallback array handles bounds safely.
@@ -23,4 +25,79 @@ DimensionModeParams DimensionMode_GetParams(DimensionMode mode)
     }
 
     return modeParams[mode];
+}
+
+DimensionModeParams DimensionMode_ResolveParams(DimensionSelectionMode selMode, DimensionModeMask mask)
+{
+    // Ensure mask has at least one mode active (fallback to MODE_1 if empty)
+    if (mask == 0) {
+        mask = (1 << DIMENSION_MODE_1);
+    }
+
+    // Single mode: behavior is authentic. Choose highest bit/mode if multiple are somehow set.
+    if (selMode == DIMENSION_SELECTION_SINGLE) {
+        DimensionMode highestMode = DIMENSION_MODE_1;
+        for (int i = DIMENSION_MODE_COUNT - 1; i >= 0; i--) {
+            if (mask & (1 << i)) {
+                highestMode = (DimensionMode)i;
+                break;
+            }
+        }
+        return DimensionMode_GetParams(highestMode);
+    }
+
+    // Combo mode processing
+    int activeCount = 0;
+    float sumRate = 0.0f;
+    float sumBaseMs = 0.0f;
+    float sumDepthMs = 0.0f;
+    float sumMainWet = 0.0f;
+    float sumCrossWet = 0.0f;
+    float maxRate = 0.0f;
+
+    for (int i = 0; i < DIMENSION_MODE_COUNT; i++) {
+        if (mask & (1 << i)) {
+            const DimensionModeParams* p = &modeParams[i];
+            sumRate += p->rateHz;
+            sumBaseMs += p->baseMs;
+            sumDepthMs += p->depthMs;
+            sumMainWet += p->mainWet;
+            sumCrossWet += p->crossWet;
+            if (p->rateHz > maxRate) {
+                maxRate = p->rateHz;
+            }
+            activeCount++;
+        }
+    }
+
+    // If only one mode is active, behavior matches Single Mode (no scaling)
+    if (activeCount == 1) {
+        return DimensionMode_GetParams((DimensionMode)(__builtin_ctz(mask))); // safe, mask != 0
+    }
+
+    DimensionModeParams finalParams;
+
+    // COMBO STRATEGY
+    // Base Delay: Weighted average (stable chorus core)
+    finalParams.baseMs = sumBaseMs / (float)activeCount;
+
+    // Rate: Weighted average of rates (prevents overly chaotic LFO, stays musical)
+    finalParams.rateHz = sumRate / (float)activeCount;
+
+    // Depth: Scaled sum, clamped to 1.5x max depth to prevent clipping the delay line
+    float depthScale = 0.7f;
+    finalParams.depthMs = sumDepthMs * depthScale;
+    float maxAllowedDepth = modeParams[DIMENSION_MODE_4].depthMs * 1.5f;
+    if (finalParams.depthMs > maxAllowedDepth) finalParams.depthMs = maxAllowedDepth;
+
+    // Wet: Scaled sum, clamped
+    float wetScale = 0.6f;
+    finalParams.mainWet = sumMainWet * wetScale;
+    finalParams.crossWet = sumCrossWet * wetScale;
+
+    // Soft bounds for Wet to prevent total dry/wet imbalance or blowing up mix
+    if (finalParams.mainWet > 0.6f) finalParams.mainWet = 0.6f;
+    if (finalParams.crossWet > 0.3f) finalParams.crossWet = 0.3f;
+
+    return finalParams;
 }
