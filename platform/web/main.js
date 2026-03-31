@@ -56,6 +56,7 @@ function setMode(mode) {
 // Audio file playback state
 let decodedBuffer = null;
 let currentSource = null;
+let currentDownmixer = null;
 let isPlaying = false;
 
 // UI Elements
@@ -144,47 +145,62 @@ function stopAudio() {
     playProcBtn.style.opacity = '1';
 }
 
-function playBuffer(processAudio) {
+async function playBuffer(processAudio) {
     if (!audioContext || !decodedBuffer) return;
 
-    // Gate processed playback on chorusNode availability
-    if (processAudio && !chorusNode) {
-        uploadError.innerText = 'Audio processor is not ready yet. Please wait.';
+    try {
+        // Ensure AudioContext is running
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+
+        // Gate processed playback on chorusNode availability
+        if (processAudio && !chorusNode) {
+            console.warn('Playback blocked: Audio processor not ready.');
+            uploadError.innerText = 'Audio processor is not ready yet. Please wait.';
+            uploadError.style.display = 'block';
+            return;
+        }
+
+        uploadError.style.display = 'none';
+        stopAudio(); // Stop currently playing audio if any
+
+        currentSource = audioContext.createBufferSource();
+        currentSource.buffer = decodedBuffer;
+
+        if (processAudio) {
+            // We use a GainNode to explicitly downmix to mono if the input is stereo
+            // because the hardware / Dimension Chorus DSP expects a mono input signal.
+            // It processes the mono input and generates a stereo output.
+            currentDownmixer = audioContext.createGain();
+            currentDownmixer.channelCount = 1;
+            currentDownmixer.channelCountMode = 'explicit';
+
+            currentSource.connect(currentDownmixer);
+            currentDownmixer.connect(chorusNode);
+
+            playProcBtn.style.opacity = '0.5';
+            console.log('Playing processed audio through DSP pipeline.');
+        } else {
+            // Original - connect directly to destination
+            currentSource.connect(audioContext.destination);
+            playOrigBtn.style.opacity = '0.5';
+            console.log('Playing original audio directly to destination.');
+        }
+
+        currentSource.onended = () => {
+            stopAudio();
+        };
+
+        currentSource.start(0);
+        isPlaying = true;
+        stopBtn.disabled = false;
+    } catch (e) {
+        console.error('Playback error:', e);
+        uploadError.innerText = 'Error during playback setup. Check console.';
         uploadError.style.display = 'block';
-        return;
-    }
-
-    uploadError.style.display = 'none';
-    stopAudio(); // Stop currently playing audio if any
-
-    currentSource = audioContext.createBufferSource();
-    currentSource.buffer = decodedBuffer;
-
-    if (processAudio) {
-        // We use a GainNode to explicitly downmix to mono if the input is stereo
-        // because the hardware / Dimension Chorus DSP expects a mono input signal.
-        // It processes the mono input and generates a stereo output.
-        currentDownmixer = audioContext.createGain();
-        currentDownmixer.channelCount = 1;
-        currentDownmixer.channelCountMode = 'explicit';
-
-        currentSource.connect(currentDownmixer);
-        currentDownmixer.connect(chorusNode);
-
-        playProcBtn.style.opacity = '0.5';
-    } else {
-        // Original - connect directly to destination
-        currentSource.connect(audioContext.destination);
-        playOrigBtn.style.opacity = '0.5';
-    }
-
-    currentSource.onended = () => {
         stopAudio();
-    };
-
-    currentSource.start(0);
-    isPlaying = true;
-    stopBtn.disabled = false;
+    }
 }
 
 audioUpload.addEventListener('change', handleFileUpload);
@@ -194,11 +210,15 @@ stopBtn.addEventListener('click', stopAudio);
 
 // Simple test sine wave player
 let oscillator;
-function toggleOscillator() {
+async function toggleOscillator() {
     if (!audioContext || !chorusNode) return;
 
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+    }
+
     if (oscillator) {
-        oscillator.stop();
+        try { oscillator.stop(); } catch (e) {}
         oscillator.disconnect();
         oscillator = null;
         document.getElementById('play-btn').innerText = 'Debug: Test Tone (A4)';
