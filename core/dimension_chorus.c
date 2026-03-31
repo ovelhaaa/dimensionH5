@@ -57,6 +57,11 @@ void DimensionChorus_Init(DimensionChorusState* s)
     memset(s->delayBuffer, 0, sizeof(s->delayBuffer));
     s->writeIndex = 0;
 
+    // Selection defaults
+    s->selectionMode = DIMENSION_SELECTION_SINGLE;
+    s->modeMask = 1; // Default: Mode 1 active
+    s->mode = DIMENSION_MODE_1;
+
     // Fixed param
     s->dryGain = 0.84f;
 
@@ -97,10 +102,9 @@ void DimensionChorus_Reset(DimensionChorusState* s)
     Dsp_BiquadInit(&s->wet2Lpf);
 }
 
-void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
+// Internal helper to apply parameter targets
+static void DimensionChorus_ApplyParams(DimensionChorusState* s, DimensionModeParams params)
 {
-    DimensionModeParams params = DimensionMode_GetParams(mode);
-
     s->targetRate   = params.rateHz;
     s->targetBaseMs = params.baseMs;
     s->targetDepth  = params.depthMs;
@@ -118,6 +122,47 @@ void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
     Dsp_BiquadCalcLPF(&s->wet2Lpf, params.lpf2Hz, WET_LPF_Q);
 }
 
+void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectionMode selMode)
+{
+    s->selectionMode = selMode;
+
+    if (selMode == DIMENSION_SELECTION_SINGLE) {
+        DimensionModeParams params = DimensionMode_GetParams(s->mode);
+        DimensionChorus_ApplyParams(s, params);
+    } else {
+        DimensionModeParams params = DimensionMode_GetComboParams(s->modeMask);
+        DimensionChorus_ApplyParams(s, params);
+    }
+}
+
+void DimensionChorus_SetModeMask(DimensionChorusState* s, uint8_t mask)
+{
+    s->modeMask = mask;
+    if (s->selectionMode == DIMENSION_SELECTION_COMBO) {
+        DimensionModeParams params = DimensionMode_GetComboParams(mask);
+        DimensionChorus_ApplyParams(s, params);
+    }
+}
+
+void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
+{
+    s->mode = mode;
+
+    // In single mode, selecting a mode also applies it immediately.
+    // We update the mask so if we switch to combo mode, it reflects the last selection.
+    s->modeMask = (1 << mode);
+
+    if (s->selectionMode == DIMENSION_SELECTION_SINGLE) {
+        DimensionModeParams params = DimensionMode_GetParams(mode);
+        DimensionChorus_ApplyParams(s, params);
+    } else {
+        // If we're in combo mode, changing the explicit single mode doesn't apply immediately,
+        // but we might want to let the UI drive this via SetModeMask directly.
+        // For backwards compatibility or simplified UI calls:
+        DimensionModeParams params = DimensionMode_GetComboParams(s->modeMask);
+        DimensionChorus_ApplyParams(s, params);
+    }
+}
 void DimensionChorus_ProcessBlock(
     DimensionChorusState* s,
     const float* inMono,

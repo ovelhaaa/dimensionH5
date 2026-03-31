@@ -24,6 +24,14 @@ class DimensionChorusWorklet extends AudioWorkletProcessor {
                 if (this.initialized) {
                     this.wasmModule._dimension_set_mode(data.mode);
                 }
+            } else if (data.type === 'setSelectionMode') {
+                if (this.initialized) {
+                    this.wasmModule._dimension_set_selection_mode(data.selMode);
+                }
+            } else if (data.type === 'setModeMask') {
+                if (this.initialized) {
+                    this.wasmModule._dimension_set_mode_mask(data.mask);
+                }
             } else if (data.type === 'reset') {
                 if (this.initialized) {
                     this.wasmModule._dimension_reset();

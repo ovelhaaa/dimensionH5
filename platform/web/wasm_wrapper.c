@@ -19,6 +19,23 @@ void dimension_set_mode(int mode) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+void dimension_set_selection_mode(int selMode) {
+    if (selMode < 0 || selMode > 1) {
+        selMode = 0;
+    }
+    DimensionChorus_SetSelectionMode(&chorus, (DimensionSelectionMode)selMode);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void dimension_set_mode_mask(int mask) {
+    // 4 bits for 4 modes (0-15)
+    if (mask < 0 || mask > 15) {
+        mask = 0;
+    }
+    DimensionChorus_SetModeMask(&chorus, (uint8_t)mask);
+}
+
+EMSCRIPTEN_KEEPALIVE
 void dimension_reset() {
     DimensionChorus_Reset(&chorus);
 }
