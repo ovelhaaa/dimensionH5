@@ -57,14 +57,16 @@ int test_mode_table_ranges() {
 int test_combo_mode_logic() {
     printf("Running Combo Mode Logic Test...\n");
 
-    // 1. Single selection in combo mask should equal single mode
-    DimensionModeParams singleParams = DimensionMode_GetParams(DIMENSION_MODE_1);
-    DimensionModeParams comboSingleParams = DimensionMode_GetComboParams(1 << 0);
+    // 1. Single selection in combo mask should equal single mode for all modes
+    for (int i = 0; i < DIMENSION_MODE_COUNT; i++) {
+        DimensionModeParams singleParams = DimensionMode_GetParams((DimensionMode)i);
+        DimensionModeParams comboSingleParams = DimensionMode_GetComboParams(1 << i);
 
-    if (!compare_float(singleParams.rateHz, comboSingleParams.rateHz, 1e-6f) ||
-        !compare_float(singleParams.depthMs, comboSingleParams.depthMs, 1e-6f)) {
-        printf("  [FAIL] Combo mask with 1 bit doesn't match authentic mode.\n");
-        return 1;
+        if (!compare_float(singleParams.rateHz, comboSingleParams.rateHz, 1e-6f) ||
+            !compare_float(singleParams.depthMs, comboSingleParams.depthMs, 1e-6f)) {
+            printf("  [FAIL] Combo mask with 1 bit doesn't match authentic mode %d.\n", i + 1);
+            return 1;
+        }
     }
 
     // 2. Combination of 1+2
