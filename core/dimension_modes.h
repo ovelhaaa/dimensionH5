@@ -21,6 +21,14 @@ typedef struct {
     float depthMs;    // Modulation depth in milliseconds
     float mainWet;    // Main wet gain
     float crossWet;   // Cross wet gain
+    float hpf1Hz;     // Wet voice A HPF frequency
+    float lpf1Hz;     // Wet voice A LPF frequency
+    float hpf2Hz;     // Wet voice B HPF frequency
+    float lpf2Hz;     // Wet voice B LPF frequency
+    float wet1Gain;   // Wet voice A static gain trim
+    float wet2Gain;   // Wet voice B static gain trim
+    float baseOffset2Ms; // Voice B static delay offset
+    float depth2Scale;   // Voice B depth scaling
 } DimensionModeParams;
 
 /**

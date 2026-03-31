@@ -16,26 +16,26 @@ int test_audio_engine_set_mode() {
 
     // Test Mode 0 (DIMENSION_MODE_1)
     AudioEngine_SetMode(0);
-    assert(chorus_state.targetRate == 0.18f);
+    assert(chorus_state.targetRate == 0.16f);
 
     // Test Mode 1 (DIMENSION_MODE_2)
     AudioEngine_SetMode(1);
-    assert(chorus_state.targetRate == 0.32f);
+    assert(chorus_state.targetRate == 0.23f);
 
     // Test Mode 2 (DIMENSION_MODE_3)
     AudioEngine_SetMode(2);
-    assert(chorus_state.targetRate == 0.55f);
+    assert(chorus_state.targetRate == 0.34f);
 
     // Test Mode 3 (DIMENSION_MODE_4)
     AudioEngine_SetMode(3);
-    assert(chorus_state.targetRate == 0.72f);
+    assert(chorus_state.targetRate == 0.48f);
 
     // Test Out of bounds (Should default to DIMENSION_MODE_1)
     AudioEngine_SetMode(4);
-    assert(chorus_state.targetRate == 0.18f);
+    assert(chorus_state.targetRate == 0.16f);
 
     AudioEngine_SetMode(-1);
-    assert(chorus_state.targetRate == 0.18f);
+    assert(chorus_state.targetRate == 0.16f);
 
     printf("test_audio_engine_set_mode PASSED.\n");
     return 0;

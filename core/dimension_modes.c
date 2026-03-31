@@ -3,17 +3,17 @@
 // Define the 4 preset modes.
 // Fallback array handles bounds safely.
 static const DimensionModeParams modeParams[DIMENSION_MODE_COUNT] = {
-    // Mode 1: rate=0.18, base=10.5, depth=0.70, mainWet=0.20, crossWet=0.06
-    { 0.18f, 10.5f, 0.70f, 0.20f, 0.06f },
+    // Mode 1: near-always-on widening
+    { 0.16f,  9.9f, 0.42f, 0.16f, 0.10f, 145.0f, 5100.0f, 190.0f, 4300.0f, 1.00f, 0.92f, 0.12f, 0.92f },
 
-    // Mode 2: rate=0.32, base=11.5, depth=1.00, mainWet=0.26, crossWet=0.09
-    { 0.32f, 11.5f, 1.00f, 0.26f, 0.09f },
+    // Mode 2: more halo, still refined
+    { 0.23f, 10.4f, 0.58f, 0.20f, 0.13f, 145.0f, 5000.0f, 190.0f, 4200.0f, 1.00f, 0.92f, 0.12f, 0.92f },
 
-    // Mode 3: rate=0.55, base=12.5, depth=1.30, mainWet=0.32, crossWet=0.12
-    { 0.55f, 12.5f, 1.30f, 0.32f, 0.12f },
+    // Mode 3: strongest record-ready sweet spot
+    { 0.34f, 10.9f, 0.78f, 0.24f, 0.16f, 145.0f, 5100.0f, 190.0f, 4300.0f, 1.00f, 0.93f, 0.14f, 0.91f },
 
-    // Mode 4: rate=0.72, base=13.0, depth=1.45, mainWet=0.36, crossWet=0.15
-    { 0.72f, 13.0f, 1.45f, 0.36f, 0.15f }
+    // Mode 4: widest mode without obvious pop chorus
+    { 0.48f, 11.6f, 0.98f, 0.28f, 0.19f, 150.0f, 5300.0f, 200.0f, 4500.0f, 1.00f, 0.94f, 0.16f, 0.90f }
 };
 
 DimensionModeParams DimensionMode_GetParams(DimensionMode mode)
