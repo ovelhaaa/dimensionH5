@@ -37,6 +37,17 @@ async function initAudio() {
             document.getElementById('status').innerText = 'Audio Engine Ready';
             document.getElementById('start-btn').disabled = true;
             document.getElementById('play-btn').disabled = false;
+
+            // Sync UI state to DSP
+            setSelectionMode(currentSelectionMode);
+            if (currentSelectionMode === 0) {
+                const checkedBoxes = Array.from(modeCheckboxes).filter(cb => cb.checked);
+                if (checkedBoxes.length > 0) {
+                    setMode(checkedBoxes[0].value);
+                }
+            } else {
+                updateMask();
+            }
         } else if (e.data.type === 'error') {
             console.error('Worklet Error:', e.data.message);
             document.getElementById('status').innerText = 'Error: ' + e.data.message;

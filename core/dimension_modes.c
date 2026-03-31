@@ -50,16 +50,19 @@ DimensionModeParams DimensionMode_GetParams(DimensionMode mode)
  */
 DimensionModeParams DimensionMode_GetComboParams(uint8_t modeMask)
 {
-    // If no mode selected or invalid mask, fallback to mode 1
-    if (modeMask == 0 || (modeMask & ((1 << DIMENSION_MODE_COUNT) - 1)) == 0) {
+    // Mask off any invalid high bits outside our supported modes
+    uint8_t maskedMode = modeMask & ((1 << DIMENSION_MODE_COUNT) - 1);
+
+    // If no valid modes selected, fallback to mode 1
+    if (maskedMode == 0) {
         return DimensionMode_GetParams(DIMENSION_MODE_1);
     }
 
     // Check if only one mode is active (power of 2)
     // If so, just return its parameters exactly.
-    if ((modeMask & (modeMask - 1)) == 0) {
+    if ((maskedMode & (maskedMode - 1)) == 0) {
         for (int i = 0; i < DIMENSION_MODE_COUNT; i++) {
-            if (modeMask & (1 << i)) {
+            if (maskedMode & (1 << i)) {
                 return DimensionMode_GetParams((DimensionMode)i);
             }
         }
@@ -83,7 +86,7 @@ DimensionModeParams DimensionMode_GetComboParams(uint8_t modeMask)
     int activeCount = 0;
 
     for (int i = 0; i < DIMENSION_MODE_COUNT; i++) {
-        if (modeMask & (1 << i)) {
+        if (maskedMode & (1 << i)) {
             const DimensionModeParams* p = &modeParams[i];
 
             // Rate: keep max, or we can use weighted average.

@@ -2,6 +2,7 @@
 #include "dsp_interp.h"
 #include <string.h> // for memset
 #include <math.h>
+#include <stdio.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -197,21 +198,21 @@ void DimensionChorus_SetModeMask(DimensionChorusState* s, uint8_t mask)
  * @param s Chorus state to update; its mode and modeMask are modified and target parameters may be updated.
  * @param mode Mode to select; also used to compute the new modeMask as (1 << mode).
  */
+
 void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
 {
     s->mode = mode;
 
-    // In single mode, selecting a mode also applies it immediately.
-    // We update the mask so if we switch to combo mode, it reflects the last selection.
-    s->modeMask = (1 << mode);
-
     if (s->selectionMode == DIMENSION_SELECTION_SINGLE) {
+        // In single mode, selecting a mode also applies it immediately.
+        // We update the mask so if we switch to combo mode, it reflects the last selection.
+        s->modeMask = (1 << mode);
         DimensionModeParams params = DimensionMode_GetParams(mode);
         DimensionChorus_ApplyParams(s, params);
     } else {
-        // If we're in combo mode, changing the explicit single mode doesn't apply immediately,
-        // but we might want to let the UI drive this via SetModeMask directly.
-        // For backwards compatibility or simplified UI calls:
+        // Warning log for calling SetMode while in Combo Mode
+        printf("WARNING: DimensionChorus_SetMode called while in COMBO mode. Mode set, but parameters are dictated by modeMask.\n");
+        // Do not mutate s->modeMask to preserve the combo state.
         DimensionModeParams params = DimensionMode_GetComboParams(s->modeMask);
         DimensionChorus_ApplyParams(s, params);
     }
