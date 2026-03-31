@@ -22,6 +22,10 @@ typedef struct {
     float targetDepth;
     float targetMainW;
     float targetCrossW;
+    float targetBaseOffset2Ms;
+    float targetDepth2Scale;
+    float targetWet1Gain;
+    float targetWet2Gain;
 
     // Smoothed working parameters
     float rate;
@@ -29,14 +33,20 @@ typedef struct {
     float depth;
     float mainW;
     float crossW;
+    float baseOffset2Ms;
+    float depth2Scale;
+    float wet1Gain;
+    float wet2Gain;
 
     // Fixed dry gain
     float dryGain;
 
     // LFO State
     float phaseAcc;
-    float lfoSmoothed;
+    float lfo1Smoothed;
+    float lfo2Smoothed;
     float lfoCoef;
+    float lfoCoef2;
 
     // Per-voice Filters
     BiquadDf2T wet1Hpf;

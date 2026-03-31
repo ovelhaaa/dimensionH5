@@ -1,5 +1,4 @@
 #include "dimension_chorus.h"
-#include "dsp_math.h"
 #include "dsp_interp.h"
 #include <string.h> // for memset
 #include <math.h>
@@ -8,15 +7,30 @@
 #define M_PI 3.14159265358979323846f
 #endif
 
-// Fixed wet filter parameters based on v1 specification
-#define WET_HPF_FREQ 120.0f
 #define WET_HPF_Q    0.707f // Butterworth
-#define WET_LPF_FREQ 6200.0f
 #define WET_LPF_Q    0.707f
 
 // Smoothing coeff calculated for control-rate block smoothing
 // This could be tuned to give ~10ms transition
 #define CONTROL_SMOOTH_COEF 0.08f
+
+static inline float Dimension_LfoShape(float x)
+{
+    return x - 0.18f * x * x * x;
+}
+
+static inline float Dimension_WetSoftSat(float x)
+{
+    x *= 1.08f;
+    return x / (1.0f + 0.18f * fabsf(x));
+}
+
+static inline float Dimension_OutputSafety(float x)
+{
+    if (x > 0.99f) return 0.99f;
+    if (x < -0.99f) return -0.99f;
+    return x;
+}
 
 /**
  * Control-rate parameter update.
@@ -31,6 +45,10 @@ static inline void Dimension_UpdateControl(DimensionChorusState* s)
     s->depth  += k * (s->targetDepth  - s->depth);
     s->mainW  += k * (s->targetMainW  - s->mainW);
     s->crossW += k * (s->targetCrossW - s->crossW);
+    s->baseOffset2Ms += k * (s->targetBaseOffset2Ms - s->baseOffset2Ms);
+    s->depth2Scale   += k * (s->targetDepth2Scale   - s->depth2Scale);
+    s->wet1Gain      += k * (s->targetWet1Gain      - s->wet1Gain);
+    s->wet2Gain      += k * (s->targetWet2Gain      - s->wet2Gain);
 }
 
 void DimensionChorus_Init(DimensionChorusState* s)
@@ -40,11 +58,12 @@ void DimensionChorus_Init(DimensionChorusState* s)
     s->writeIndex = 0;
 
     // Fixed param
-    s->dryGain = 0.88f;
+    s->dryGain = 0.84f;
 
     // Default LFO Filter Coef for 2Hz cutoff at sampling rate 48k
     // a_lfo = 1 - e^(-2*pi*fc/fs)
     s->lfoCoef = 1.0f - expf(-2.0f * (float)M_PI * 2.0f / DSP_SAMPLE_RATE);
+    s->lfoCoef2 = 1.0f - expf(-2.0f * (float)M_PI * 1.7f / DSP_SAMPLE_RATE);
 
     DimensionChorus_Reset(s);
 
@@ -57,6 +76,10 @@ void DimensionChorus_Init(DimensionChorusState* s)
     s->depth  = s->targetDepth;
     s->mainW  = s->targetMainW;
     s->crossW = s->targetCrossW;
+    s->baseOffset2Ms = s->targetBaseOffset2Ms;
+    s->depth2Scale = s->targetDepth2Scale;
+    s->wet1Gain = s->targetWet1Gain;
+    s->wet2Gain = s->targetWet2Gain;
 }
 
 void DimensionChorus_Reset(DimensionChorusState* s)
@@ -65,7 +88,8 @@ void DimensionChorus_Reset(DimensionChorusState* s)
     s->writeIndex = 0;
 
     s->phaseAcc = 0.0f;
-    s->lfoSmoothed = 0.0f;
+    s->lfo1Smoothed = 0.0f;
+    s->lfo2Smoothed = 0.0f;
 
     Dsp_BiquadInit(&s->wet1Hpf);
     Dsp_BiquadInit(&s->wet1Lpf);
@@ -82,14 +106,16 @@ void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
     s->targetDepth  = params.depthMs;
     s->targetMainW  = params.mainWet;
     s->targetCrossW = params.crossWet;
+    s->targetBaseOffset2Ms = params.baseOffset2Ms;
+    s->targetDepth2Scale = params.depth2Scale;
+    s->targetWet1Gain = params.wet1Gain;
+    s->targetWet2Gain = params.wet2Gain;
 
-    // Recalculate filters (they are fixed freq right now, but best practice
-    // to init them here on mode switch for future flexibility)
-    Dsp_BiquadCalcHPF(&s->wet1Hpf, WET_HPF_FREQ, WET_HPF_Q);
-    Dsp_BiquadCalcLPF(&s->wet1Lpf, WET_LPF_FREQ, WET_LPF_Q);
+    Dsp_BiquadCalcHPF(&s->wet1Hpf, params.hpf1Hz, WET_HPF_Q);
+    Dsp_BiquadCalcLPF(&s->wet1Lpf, params.lpf1Hz, WET_LPF_Q);
 
-    Dsp_BiquadCalcHPF(&s->wet2Hpf, WET_HPF_FREQ, WET_HPF_Q);
-    Dsp_BiquadCalcLPF(&s->wet2Lpf, WET_LPF_FREQ, WET_LPF_Q);
+    Dsp_BiquadCalcHPF(&s->wet2Hpf, params.hpf2Hz, WET_HPF_Q);
+    Dsp_BiquadCalcLPF(&s->wet2Lpf, params.lpf2Hz, WET_LPF_Q);
 }
 
 void DimensionChorus_ProcessBlock(
@@ -105,6 +131,7 @@ void DimensionChorus_ProcessBlock(
     const float samplesPerMs = DSP_SAMPLE_RATE / 1000.0f;
     const float baseSamps  = s->baseMs * samplesPerMs;
     const float depthSamps = s->depth  * samplesPerMs;
+    const float baseOffset2Samps = s->baseOffset2Ms * samplesPerMs;
     const float ratePhaseInc = s->rate / DSP_SAMPLE_RATE;
 
     uint32_t wIdx = s->writeIndex;
@@ -129,12 +156,15 @@ void DimensionChorus_ProcessBlock(
             triRaw = 3.0f - 4.0f * s->phaseAcc;
         }
 
-        // Low-pass smooth the triangle wave
-        s->lfoSmoothed += s->lfoCoef * (triRaw - s->lfoSmoothed);
+        // Low-pass smooth + slight shaping to hide geometric corners
+        s->lfo1Smoothed += s->lfoCoef * (triRaw - s->lfo1Smoothed);
+        s->lfo2Smoothed += s->lfoCoef2 * (triRaw - s->lfo2Smoothed);
+        const float lfo1 = Dimension_LfoShape(s->lfo1Smoothed);
+        const float lfo2 = Dimension_LfoShape(s->lfo2Smoothed);
 
         // Calculate actual delay taps
-        const float tapTime1 = baseSamps + depthSamps * s->lfoSmoothed;
-        const float tapTime2 = baseSamps - depthSamps * s->lfoSmoothed;
+        const float tapTime1 = baseSamps + depthSamps * lfo1;
+        const float tapTime2 = (baseSamps + baseOffset2Samps) - (depthSamps * s->depth2Scale * lfo2);
 
         // Calculate fractional read positions.
         // The delay is measured from the current writeIndex.
@@ -156,18 +186,24 @@ void DimensionChorus_ProcessBlock(
 
         // 4. Voicing HPF + LPF
         wet1 = Dsp_BiquadProcess(&s->wet1Hpf, wet1);
+        wet1 = Dimension_WetSoftSat(wet1);
         wet1 = Dsp_BiquadProcess(&s->wet1Lpf, wet1);
+        wet1 *= s->wet1Gain;
 
         wet2 = Dsp_BiquadProcess(&s->wet2Hpf, wet2);
+        wet2 = Dimension_WetSoftSat(wet2);
         wet2 = Dsp_BiquadProcess(&s->wet2Lpf, wet2);
+        wet2 *= s->wet2Gain;
 
-        // 5. Stereo Crossmix
-        float outL = s->dryGain * dry + s->mainW * wet1 - s->crossW * wet2;
-        float outR = s->dryGain * dry + s->mainW * wet2 - s->crossW * wet1;
+        // 5. Stereo M/S wet recombination to preserve center while widening sides
+        const float wetMid = 0.5f * (wet1 + wet2);
+        const float wetSide = 0.5f * (wet1 - wet2);
+        float outL = s->dryGain * dry + s->mainW * wetMid + s->crossW * wetSide;
+        float outR = s->dryGain * dry + s->mainW * wetMid - s->crossW * wetSide;
 
-        // 6. Output Assignment with Safety Soft Clip
-        outStereo[2 * i + 0] = Dsp_SoftClip(outL);
-        outStereo[2 * i + 1] = Dsp_SoftClip(outR);
+        // 6. Transparent safety clamp (should rarely engage in normal use)
+        outStereo[2 * i + 0] = Dimension_OutputSafety(outL);
+        outStereo[2 * i + 1] = Dimension_OutputSafety(outR);
 
         // 7. Advance write pointer
         wIdx = (wIdx + 1u) & DELAY_BUFFER_MASK;
@@ -193,6 +229,7 @@ void DimensionChorus_ProcessBlock_Inspect(
     const float samplesPerMs = DSP_SAMPLE_RATE / 1000.0f;
     const float baseSamps  = s->baseMs * samplesPerMs;
     const float depthSamps = s->depth  * samplesPerMs;
+    const float baseOffset2Samps = s->baseOffset2Ms * samplesPerMs;
     const float ratePhaseInc = s->rate / DSP_SAMPLE_RATE;
 
     uint32_t wIdx = s->writeIndex;
@@ -217,12 +254,15 @@ void DimensionChorus_ProcessBlock_Inspect(
             triRaw = 3.0f - 4.0f * s->phaseAcc;
         }
 
-        // Low-pass smooth the triangle wave
-        s->lfoSmoothed += s->lfoCoef * (triRaw - s->lfoSmoothed);
+        // Low-pass smooth + slight shaping to hide geometric corners
+        s->lfo1Smoothed += s->lfoCoef * (triRaw - s->lfo1Smoothed);
+        s->lfo2Smoothed += s->lfoCoef2 * (triRaw - s->lfo2Smoothed);
+        const float lfo1 = Dimension_LfoShape(s->lfo1Smoothed);
+        const float lfo2 = Dimension_LfoShape(s->lfo2Smoothed);
 
         // Calculate actual delay taps
-        const float tapTime1 = baseSamps + depthSamps * s->lfoSmoothed;
-        const float tapTime2 = baseSamps - depthSamps * s->lfoSmoothed;
+        const float tapTime1 = baseSamps + depthSamps * lfo1;
+        const float tapTime2 = (baseSamps + baseOffset2Samps) - (depthSamps * s->depth2Scale * lfo2);
 
         float readPos1 = (float)wIdx - tapTime1;
         float readPos2 = (float)wIdx - tapTime2;
@@ -236,17 +276,23 @@ void DimensionChorus_ProcessBlock_Inspect(
 
         // 4. Voicing HPF + LPF
         wet1 = Dsp_BiquadProcess(&s->wet1Hpf, wet1);
+        wet1 = Dimension_WetSoftSat(wet1);
         wet1 = Dsp_BiquadProcess(&s->wet1Lpf, wet1);
+        wet1 *= s->wet1Gain;
 
         wet2 = Dsp_BiquadProcess(&s->wet2Hpf, wet2);
+        wet2 = Dimension_WetSoftSat(wet2);
         wet2 = Dsp_BiquadProcess(&s->wet2Lpf, wet2);
+        wet2 *= s->wet2Gain;
 
-        // 5. Stereo Crossmix
-        float outL = s->dryGain * dry + s->mainW * wet1 - s->crossW * wet2;
-        float outR = s->dryGain * dry + s->mainW * wet2 - s->crossW * wet1;
+        // 5. Stereo M/S wet recombination to preserve center while widening sides
+        const float wetMid = 0.5f * (wet1 + wet2);
+        const float wetSide = 0.5f * (wet1 - wet2);
+        float outL = s->dryGain * dry + s->mainW * wetMid + s->crossW * wetSide;
+        float outR = s->dryGain * dry + s->mainW * wetMid - s->crossW * wetSide;
 
-        float clippedL = Dsp_SoftClip(outL);
-        float clippedR = Dsp_SoftClip(outR);
+        float clippedL = Dimension_OutputSafety(outL);
+        float clippedR = Dimension_OutputSafety(outR);
 
         // 6. Output Assignment with Safety Soft Clip
         if (outStereo) {

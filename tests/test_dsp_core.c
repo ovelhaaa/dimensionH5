@@ -20,9 +20,11 @@
 
 #define HEADROOM_TEST_FRAMES (DSP_BLOCK_SIZE * 4)
 #define HEADROOM_OVERDRIVE_FACTOR 2.0f
-#define SOFT_CLIP_MAX_THRESHOLD 0.6667f
+#define SOFT_CLIP_MAX_THRESHOLD 0.99f
 #define SOFT_CLIP_EPSILON 1e-4f
 #define SOFT_CLIP_MIN_PEAK_THRESHOLD 0.6f
+#define CENTER_PRESERVE_MIN 0.70f
+#define STEREO_DIFF_MIN 0.01f
 
 #define MONO_SUM_TEST_DURATION_MS 100.0f
 #define MONO_SUM_TEST_FRAMES ((size_t)((MONO_SUM_TEST_DURATION_MS / 1000.0f) * DSP_SAMPLE_RATE))
@@ -30,6 +32,37 @@
 // Funcoes auxiliares para os testes
 int compare_float(float a, float b, float epsilon) {
     return fabsf(a - b) < epsilon;
+}
+
+int test_mode_table_ranges() {
+    printf("Running Mode Table Range Test...\n");
+    const float expectedRates[DIMENSION_MODE_COUNT] = {0.16f, 0.23f, 0.34f, 0.48f};
+    const float expectedBaseMs[DIMENSION_MODE_COUNT] = {9.9f, 10.4f, 10.9f, 11.6f};
+    const float expectedDepthMs[DIMENSION_MODE_COUNT] = {0.42f, 0.58f, 0.78f, 0.98f};
+
+    for (int i = 0; i < DIMENSION_MODE_COUNT; ++i) {
+        const DimensionModeParams p = DimensionMode_GetParams((DimensionMode)i);
+        if (!compare_float(p.rateHz, expectedRates[i], 1e-6f) ||
+            !compare_float(p.baseMs, expectedBaseMs[i], 1e-6f) ||
+            !compare_float(p.depthMs, expectedDepthMs[i], 1e-6f)) {
+            printf("  [FAIL] Mode %d mismatch (rate/base/depth).\n", i + 1);
+            return 1;
+        }
+    }
+
+    printf("  [OK] Mode table sweet spots loaded as expected.\n");
+    return 0;
+}
+
+int test_voice_asymmetry_config() {
+    printf("Running Voice Asymmetry Config Test...\n");
+    const DimensionModeParams p = DimensionMode_GetParams(DIMENSION_MODE_3);
+    if (!(p.baseOffset2Ms > 0.1f && p.depth2Scale < 1.0f && p.wet2Gain < p.wet1Gain && p.lpf2Hz < p.lpf1Hz)) {
+        printf("  [FAIL] Voice asymmetry params not configured as expected.\n");
+        return 1;
+    }
+    printf("  [OK] Voice asymmetry parameters are active.\n");
+    return 0;
 }
 
 // 1. Impulse Response Test (Timing/Fase)
@@ -112,7 +145,7 @@ int test_headroom_clipping() {
     // Injeta senoidal 1kHz @ 48kHz SR em full scale 1.0f
     generate_sine(inMono, test_frames, TEST_FREQ_1KHZ, DSP_SAMPLE_RATE);
 
-    // Escala abusivamente para +6dB para forçar a saturação testada
+    // Escala abusivamente para +6dB para forçar a proteção de saída
     for (size_t i = 0; i < test_frames; i++) {
         inMono[i] *= HEADROOM_OVERDRIVE_FACTOR;
     }
@@ -137,12 +170,64 @@ int test_headroom_clipping() {
     }
 
     if (!clipped_badly && max_peak > SOFT_CLIP_MIN_PEAK_THRESHOLD) {
-         printf("  [OK] Sinais contidos no limitador da matriz com sucesso (Max: %f)\n", max_peak);
+         printf("  [OK] Sinais contidos no estágio de proteção de saída (Max: %f)\n", max_peak);
          return 0;
     } else {
          printf("  [FAIL] Detectada anomalia de headroom! Pico medido: %f\n", max_peak);
          return 1;
     }
+}
+
+int test_stereo_width_vs_center() {
+    printf("Running Stereo Width vs Center Test...\n");
+    DimensionChorusState chorus;
+    DimensionChorus_Init(&chorus);
+    DimensionChorus_SetMode(&chorus, DIMENSION_MODE_4);
+
+    const size_t test_frames = MONO_SUM_TEST_FRAMES;
+    float* inMono = (float*)malloc(test_frames * sizeof(float));
+    float* outStereo = (float*)malloc(test_frames * 2 * sizeof(float));
+    if (!inMono || !outStereo) {
+        printf("  [FAIL] Allocation failure.\n");
+        free(inMono);
+        free(outStereo);
+        return 1;
+    }
+
+    generate_sine(inMono, test_frames, TEST_FREQ_1KHZ, DSP_SAMPLE_RATE);
+
+    size_t frames_processed = 0;
+    while (frames_processed < test_frames) {
+        DimensionChorus_ProcessBlock(&chorus, &inMono[frames_processed], &outStereo[frames_processed * 2], DSP_BLOCK_SIZE);
+        frames_processed += DSP_BLOCK_SIZE;
+    }
+
+    float sideEnergy = 0.0f;
+    float centerEnergy = 0.0f;
+    float inEnergy = 0.0f;
+    for (size_t i = 0; i < test_frames; ++i) {
+        const float l = outStereo[2 * i + 0];
+        const float r = outStereo[2 * i + 1];
+        const float mid = 0.5f * (l + r);
+        const float side = 0.5f * (l - r);
+        centerEnergy += mid * mid;
+        sideEnergy += side * side;
+        inEnergy += inMono[i] * inMono[i];
+    }
+
+    free(inMono);
+    free(outStereo);
+
+    const float centerRatio = sqrtf(centerEnergy / inEnergy);
+    const float sideRms = sqrtf(sideEnergy / (float)test_frames);
+
+    if (centerRatio >= CENTER_PRESERVE_MIN && sideRms >= STEREO_DIFF_MIN) {
+        printf("  [OK] Center preserved (ratio=%f) with audible side spread (rms=%f).\n", centerRatio, sideRms);
+        return 0;
+    }
+
+    printf("  [FAIL] Center/side balance out of expected bounds (ratio=%f, side=%f).\n", centerRatio, sideRms);
+    return 1;
 }
 
 // 3. Mono Summing Phase Cancellation Test
@@ -197,9 +282,12 @@ int test_mono_summing() {
 int main() {
     printf("=== Dimension Chorus DSP Core Tests ===\n");
     int failures = 0;
+    failures += test_mode_table_ranges();
+    failures += test_voice_asymmetry_config();
     failures += test_impulse_response();
     failures += test_headroom_clipping();
     failures += test_mono_summing();
+    failures += test_stereo_width_vs_center();
     printf("=======================================\n");
     printf("Tests Failed: %d\n", failures);
     return failures;
