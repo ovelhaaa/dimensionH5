@@ -1,6 +1,8 @@
 #ifndef DIMENSION_MODES_H
 #define DIMENSION_MODES_H
 
+#include <stdint.h>
+
 /**
  * @brief Enum defining the 4 preset modes.
  */
@@ -11,6 +13,14 @@ typedef enum {
     DIMENSION_MODE_4,
     DIMENSION_MODE_COUNT
 } DimensionMode;
+
+/**
+ * @brief Enum defining the selection behavior (Authentic vs Combo).
+ */
+typedef enum {
+    DIMENSION_SELECTION_SINGLE = 0,
+    DIMENSION_SELECTION_COMBO
+} DimensionSelectionMode;
 
 /**
  * @brief Struct to hold the base parameters for a single mode.
@@ -38,5 +48,13 @@ typedef struct {
  * @return DimensionModeParams The corresponding parameters.
  */
 DimensionModeParams DimensionMode_GetParams(DimensionMode mode);
+
+/**
+ * @brief Retrieve mixed parameters for a combination of modes.
+ *
+ * @param modeMask Bitmask of active modes (bit 0 = Mode 1, bit 1 = Mode 2, etc.).
+ * @return DimensionModeParams The combined parameters.
+ */
+DimensionModeParams DimensionMode_GetComboParams(uint8_t modeMask);
 
 #endif // DIMENSION_MODES_H

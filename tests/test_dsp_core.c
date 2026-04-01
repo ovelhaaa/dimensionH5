@@ -54,6 +54,49 @@ int test_mode_table_ranges() {
     return 0;
 }
 
+int test_combo_mode_logic() {
+    printf("Running Combo Mode Logic Test...\n");
+
+    // 1. Single selection in combo mask should equal single mode for all modes
+    for (int i = 0; i < DIMENSION_MODE_COUNT; i++) {
+        DimensionModeParams singleParams = DimensionMode_GetParams((DimensionMode)i);
+        DimensionModeParams comboSingleParams = DimensionMode_GetComboParams(1 << i);
+
+        if (!compare_float(singleParams.rateHz, comboSingleParams.rateHz, 1e-6f) ||
+            !compare_float(singleParams.depthMs, comboSingleParams.depthMs, 1e-6f)) {
+            printf("  [FAIL] Combo mask with 1 bit doesn't match authentic mode %d.\n", i + 1);
+            return 1;
+        }
+    }
+
+    // 2. Combination of 1+2
+    DimensionModeParams combo12 = DimensionMode_GetComboParams((1 << 0) | (1 << 1));
+    DimensionModeParams p1 = DimensionMode_GetParams(DIMENSION_MODE_1);
+    DimensionModeParams p2 = DimensionMode_GetParams(DIMENSION_MODE_2);
+
+    float expectedRate = (p1.rateHz > p2.rateHz) ? p1.rateHz : p2.rateHz;
+    if (!compare_float(combo12.rateHz, expectedRate, 1e-6f)) {
+        printf("  [FAIL] Combo rate should be max of selected.\n");
+        return 1;
+    }
+
+    float expectedDepth = (p1.depthMs + p2.depthMs) * 0.7f; // Depth scaling
+    if (!compare_float(combo12.depthMs, expectedDepth, 1e-6f)) {
+        printf("  [FAIL] Combo depth not scaled correctly.\n");
+        return 1;
+    }
+
+    // 3. All modes selected (clamp testing)
+    DimensionModeParams allCombo = DimensionMode_GetComboParams(15);
+    if (allCombo.depthMs > 1.5f || allCombo.mainWet > 0.4f) {
+        printf("  [FAIL] Combo params not clamped correctly.\n");
+        return 1;
+    }
+
+    printf("  [OK] Combo mode parameters resolve predictably.\n");
+    return 0;
+}
+
 int test_voice_asymmetry_config() {
     printf("Running Voice Asymmetry Config Test...\n");
     const DimensionModeParams p = DimensionMode_GetParams(DIMENSION_MODE_3);
@@ -283,6 +326,7 @@ int main() {
     printf("=== Dimension Chorus DSP Core Tests ===\n");
     int failures = 0;
     failures += test_mode_table_ranges();
+    failures += test_combo_mode_logic();
     failures += test_voice_asymmetry_config();
     failures += test_impulse_response();
     failures += test_headroom_clipping();

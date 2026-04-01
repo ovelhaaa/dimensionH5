@@ -37,6 +37,17 @@ async function initAudio() {
             document.getElementById('status').innerText = 'Audio Engine Ready';
             document.getElementById('start-btn').disabled = true;
             document.getElementById('play-btn').disabled = false;
+
+            // Sync UI state to DSP
+            setSelectionMode(currentSelectionMode);
+            if (currentSelectionMode === 0) {
+                const checkedBoxes = Array.from(modeCheckboxes).filter(cb => cb.checked);
+                if (checkedBoxes.length > 0) {
+                    setMode(checkedBoxes[0].value);
+                }
+            } else {
+                updateMask();
+            }
         } else if (e.data.type === 'error') {
             console.error('Worklet Error:', e.data.message);
             document.getElementById('status').innerText = 'Error: ' + e.data.message;
@@ -50,6 +61,18 @@ async function initAudio() {
 function setMode(mode) {
     if (chorusNode) {
         chorusNode.port.postMessage({ type: 'setMode', mode: parseInt(mode, 10) });
+    }
+}
+
+function setSelectionMode(selMode) {
+    if (chorusNode) {
+        chorusNode.port.postMessage({ type: 'setSelectionMode', selMode: parseInt(selMode, 10) });
+    }
+}
+
+function setModeMask(mask) {
+    if (chorusNode) {
+        chorusNode.port.postMessage({ type: 'setModeMask', mask: parseInt(mask, 10) });
     }
 }
 
@@ -357,9 +380,80 @@ async function toggleOscillator() {
 // User interactions
 document.getElementById('start-btn').addEventListener('click', initAudio);
 
-const modeRadios = document.querySelectorAll('input[name="mode"]');
-modeRadios.forEach(radio => {
-    radio.addEventListener('change', (e) => setMode(e.target.value));
+let currentSelectionMode = 0; // 0 = Authentic, 1 = Combo
+
+const selModeRadios = document.querySelectorAll('input[name="selection-mode"]');
+selModeRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        currentSelectionMode = parseInt(e.target.value, 10);
+        setSelectionMode(currentSelectionMode);
+
+        // Re-evaluate checkboxes
+        if (currentSelectionMode === 0) {
+            // Authentic mode: ensure only one is selected
+            const checkedBoxes = Array.from(modeCheckboxes).filter(cb => cb.checked);
+            if (checkedBoxes.length > 1) {
+                // Keep the lowest active one, uncheck the rest
+                let first = true;
+                checkedBoxes.forEach(cb => {
+                    if (first) {
+                        first = false;
+                        setMode(cb.value);
+                    } else {
+                        cb.checked = false;
+                    }
+                });
+            } else if (checkedBoxes.length === 1) {
+                setMode(checkedBoxes[0].value);
+            } else {
+                // None selected (shouldn't happen), default to mode 1
+                modeCheckboxes[0].checked = true;
+                setMode(0);
+            }
+        } else {
+            // Switching to combo: push current mask
+            updateMask();
+        }
+    });
+});
+
+const modeCheckboxes = document.querySelectorAll('input[name="mode"]');
+
+function updateMask() {
+    let mask = 0;
+    modeCheckboxes.forEach(cb => {
+        if (cb.checked) {
+            mask |= (1 << parseInt(cb.value, 10));
+        }
+    });
+
+    // Prevent unselecting all (if none, reselect mode 1)
+    if (mask === 0) {
+        modeCheckboxes[0].checked = true;
+        mask = 1;
+    }
+
+    setModeMask(mask);
+}
+
+modeCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+        if (currentSelectionMode === 0) {
+            // Authentic mode: enforce radio button behavior
+            if (e.target.checked) {
+                modeCheckboxes.forEach(cb => {
+                    if (cb !== e.target) cb.checked = false;
+                });
+                setMode(e.target.value);
+            } else {
+                // Prevent unchecking the last active button
+                e.target.checked = true;
+            }
+        } else {
+            // Combo mode: allow multiple, just update mask
+            updateMask();
+        }
+    });
 });
 
 document.getElementById('play-btn').addEventListener('click', toggleOscillator);
