@@ -2,6 +2,7 @@
 #include "dsp_interp.h"
 #include <string.h> // for memset
 #include <math.h>
+#include <stdio.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -51,6 +52,16 @@ static inline void Dimension_UpdateControl(DimensionChorusState* s)
     s->wet2Gain      += k * (s->targetWet2Gain      - s->wet2Gain);
 }
 
+/**
+ * Initialize a DimensionChorusState to a known startup state.
+ *
+ * Sets reasonable defaults (selection mode, mode/mask, dry gain), clears the delay
+ * buffer, computes default LFO smoothing coefficients, resets internal modulation
+ * and filter state, applies the default mode's parameters, and copies target
+ * parameter values into the current fields to avoid audible ramps on startup.
+ *
+ * @param s Pointer to the DimensionChorusState to initialize (must be valid).
+ */
 void DimensionChorus_Init(DimensionChorusState* s)
 {
     // Clear buffer
@@ -87,6 +98,14 @@ void DimensionChorus_Init(DimensionChorusState* s)
     s->wet2Gain = s->targetWet2Gain;
 }
 
+/**
+ * Reset the Dimension chorus state to an initial, silent condition.
+ *
+ * Clears the delay buffer and write index, zeroes modulation state (phase accumulator
+ * and LFO smoothing states), and initializes the four wet-path biquad filters.
+ *
+ * @param s Pointer to the DimensionChorusState to reset.
+ */
 void DimensionChorus_Reset(DimensionChorusState* s)
 {
     memset(s->delayBuffer, 0, sizeof(s->delayBuffer));
@@ -102,7 +121,15 @@ void DimensionChorus_Reset(DimensionChorusState* s)
     Dsp_BiquadInit(&s->wet2Lpf);
 }
 
-// Internal helper to apply parameter targets
+/**
+ * Apply mode parameters to the chorus state as smoothing targets and recompute wet-path filters.
+ *
+ * Copies values from params into the state's target parameter fields and recalculates HPF/LPF
+ * biquad coefficients for both wet paths using the cutoff frequencies contained in params.
+ *
+ * @param s State to update.
+ * @param params Source mode parameters whose values are written into the state's target fields.
+ */
 static void DimensionChorus_ApplyParams(DimensionChorusState* s, DimensionModeParams params)
 {
     s->targetRate   = params.rateHz;
@@ -122,6 +149,16 @@ static void DimensionChorus_ApplyParams(DimensionChorusState* s, DimensionModePa
     Dsp_BiquadCalcLPF(&s->wet2Lpf, params.lpf2Hz, WET_LPF_Q);
 }
 
+/**
+ * Set the selection mode for the chorus and apply the corresponding mode parameters.
+ *
+ * When set to DIMENSION_SELECTION_SINGLE, the chorus applies parameters for the current
+ * single mode. When set to the combo selection mode, the chorus applies parameters
+ * derived from the current mode mask.
+ *
+ * @param s State object to modify.
+ * @param selMode New selection mode to set.
+ */
 void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectionMode selMode)
 {
     s->selectionMode = selMode;
@@ -135,6 +172,13 @@ void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectio
     }
 }
 
+/**
+ * Update the chorus state's mode mask and, when in combo selection mode,
+ * immediately apply the parameters corresponding to the new mask.
+ *
+ * @param s Chorus state to update.
+ * @param mask Bitmask whose set bits indicate which modes are active for combo selection.
+ */
 void DimensionChorus_SetModeMask(DimensionChorusState* s, uint8_t mask)
 {
     s->modeMask = mask;
@@ -144,7 +188,16 @@ void DimensionChorus_SetModeMask(DimensionChorusState* s, uint8_t mask)
     }
 }
 
-#include <stdio.h>
+/**
+ * Set the active chorus mode and apply the corresponding parameters based on the current selection mode.
+ *
+ * Updates s->mode and sets s->modeMask to (1 << mode). If s->selectionMode is DIMENSION_SELECTION_SINGLE,
+ * the parameters for the single `mode` are applied immediately. Otherwise, combo parameters derived from
+ * the updated modeMask are applied immediately.
+ *
+ * @param s Chorus state to update; its mode and modeMask are modified and target parameters may be updated.
+ * @param mode Mode to select; also used to compute the new modeMask as (1 << mode).
+ */
 
 void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
 {
@@ -164,6 +217,20 @@ void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
         DimensionChorus_ApplyParams(s, params);
     }
 }
+/**
+ * Process a block of mono input samples into a stereo chorus output, updating internal modulation
+ * and delay state stored in the provided DimensionChorusState.
+ *
+ * Applies per-block control smoothing, LFO-driven delay modulation, Hermite-interpolated delay
+ * reads, wet-path voicing (HPF → soft saturation → LPF), mid/side stereo recombination, and
+ * output clamping.
+ *
+ * @param s Pointer to the chorus state; is read and updated (delay buffer, writeIndex, LFO state,
+ *          and internal biquad states).
+ * @param inMono Pointer to an array of `blockSize` mono input samples.
+ * @param outStereo Pointer to an array for interleaved stereo output samples (length >= 2*blockSize).
+ * @param blockSize Number of samples to process from `inMono` into `outStereo`.
+ */
 void DimensionChorus_ProcessBlock(
     DimensionChorusState* s,
     const float* inMono,

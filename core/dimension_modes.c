@@ -16,6 +16,15 @@ static const DimensionModeParams modeParams[DIMENSION_MODE_COUNT] = {
     { 0.48f, 11.6f, 0.98f, 0.28f, 0.19f, 150.0f, 5300.0f, 200.0f, 4500.0f, 1.00f, 0.94f, 0.16f, 0.90f }
 };
 
+/**
+ * Retrieve the preset DimensionModeParams for a specified DimensionMode.
+ *
+ * Validates `mode` against the range [0, DIMENSION_MODE_COUNT). If `mode` is out of range,
+ * the function uses `DIMENSION_MODE_1` as a safe fallback and returns its preset.
+ *
+ * @param mode The requested DimensionMode (must be between 0 and DIMENSION_MODE_COUNT - 1).
+ * @returns The preset DimensionModeParams corresponding to the (possibly adjusted) `mode`.
+ */
 DimensionModeParams DimensionMode_GetParams(DimensionMode mode)
 {
     if (mode < 0 || mode >= DIMENSION_MODE_COUNT) {
@@ -25,6 +34,20 @@ DimensionModeParams DimensionMode_GetParams(DimensionMode mode)
     return modeParams[mode];
 }
 
+/**
+ * Compute a combined DimensionModeParams from a bitmask of active modes.
+ *
+ * For a single active mode the exact preset is returned. For multiple active
+ * modes the result mixes presets: `rateHz` is the maximum of selected rates;
+ * `baseMs` and all filter/gain/secondary-delay fields are averaged;
+ * `depthMs` is the sum of depths scaled by 0.7 and clamped to [0.2, 1.5];
+ * `mainWet` is the sum of main wet values scaled by 0.6 and clamped to <= 0.4;
+ * `crossWet` is the sum of cross wet values scaled by 0.6 and clamped to <= 0.3.
+ *
+ * @param modeMask Bitmask selecting modes; bit i enables mode i (0..DIMENSION_MODE_COUNT-1).
+ *                 If zero or if no supported bits are set, the preset for DIMENSION_MODE_1 is returned.
+ * @returns The combined DimensionModeParams computed from the selected modes.
+ */
 DimensionModeParams DimensionMode_GetComboParams(uint8_t modeMask)
 {
     // Mask off any invalid high bits outside our supported modes

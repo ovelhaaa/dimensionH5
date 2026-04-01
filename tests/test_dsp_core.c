@@ -34,6 +34,14 @@ int compare_float(float a, float b, float epsilon) {
     return fabsf(a - b) < epsilon;
 }
 
+/**
+ * Verify that the compiled mode parameter table matches expected rate, base, and depth values.
+ *
+ * Compares each mode's `rateHz`, `baseMs`, and `depthMs` against hardcoded expected values
+ * using a tolerance of 1e-6; prints a pass or fail message for the test.
+ *
+ * @returns 0 on success, 1 if any mode's parameters differ from the expected values.
+ */
 int test_mode_table_ranges() {
     printf("Running Mode Table Range Test...\n");
     const float expectedRates[DIMENSION_MODE_COUNT] = {0.16f, 0.23f, 0.34f, 0.48f};
@@ -54,6 +62,15 @@ int test_mode_table_ranges() {
     return 0;
 }
 
+/**
+ * Validate resolution logic for combined Dimension modes.
+ *
+ * Performs three checks: (1) a single-bit combo mask yields identical parameters to the corresponding single mode,
+ * (2) a two-mode combo yields a rate equal to the maximum of the selected modes and a depth equal to 0.7 times the sum
+ * of their depths, and (3) a full-mask combo clamps depth and main wet to expected upper bounds.
+ *
+ * @returns 0 on success, 1 if any check fails.
+ */
 int test_combo_mode_logic() {
     printf("Running Combo Mode Logic Test...\n");
 
@@ -97,6 +114,17 @@ int test_combo_mode_logic() {
     return 0;
 }
 
+/**
+ * Verify that Dimension mode 3 enables the expected voice-asymmetry configuration.
+ *
+ * Checks that for DIMENSION_MODE_3 the second voice parameters satisfy:
+ * - baseOffset2Ms > 0.1
+ * - depth2Scale < 1.0
+ * - wet2Gain < wet1Gain
+ * - lpf2Hz < lpf1Hz
+ *
+ * @returns 0 on success, 1 if any of the above parameter conditions are not met.
+ */
 int test_voice_asymmetry_config() {
     printf("Running Voice Asymmetry Config Test...\n");
     const DimensionModeParams p = DimensionMode_GetParams(DIMENSION_MODE_3);
@@ -322,6 +350,14 @@ int test_mono_summing() {
     }
 }
 
+/**
+ * Run the Dimension Chorus DSP core test suite.
+ *
+ * Executes all unit/integration tests for the Dimension Chorus module and
+ * prints a summary header and the total number of failed tests.
+ *
+ * @returns Number of failed tests (0 if all tests passed).
+ */
 int main() {
     printf("=== Dimension Chorus DSP Core Tests ===\n");
     int failures = 0;
