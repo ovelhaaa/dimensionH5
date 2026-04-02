@@ -213,6 +213,16 @@
             background-color: #444;
         }
 
+        .turbo-btn {
+            margin-top: 0.75rem;
+            background-color: #8a2be2;
+        }
+
+        .turbo-btn.active {
+            background-color: #ff5a1f;
+            box-shadow: 0 0 10px rgba(255, 90, 31, 0.8);
+        }
+
         /* Progress Bar Styling */
         .progress-container {
             display: flex;
@@ -354,6 +364,7 @@
             </div>
 
             <button id="play-btn" disabled style="font-size: 0.8rem; padding: 0.5rem 1rem; background-color: #444;">Debug: Test Tone (A4)</button>
+            <button id="eta-nois-btn" class="turbo-btn" title="Segure para exagerar o efeito temporariamente.">ETA NÓIS (Turbo)</button>
 
             <div class="playback-toggle" id="selection-mode-toggle" style="margin-top: 1rem; margin-bottom: 0.5rem;">
                 <input type="radio" id="sel-authentic" name="selection-mode" value="0" checked>
