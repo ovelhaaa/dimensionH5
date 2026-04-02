@@ -381,6 +381,9 @@ async function toggleOscillator() {
 document.getElementById('start-btn').addEventListener('click', initAudio);
 
 let currentSelectionMode = 0; // 0 = Authentic, 1 = Combo
+let turboEngaged = false;
+let turboStateSnapshot = null;
+const etaNoisBtn = document.getElementById('eta-nois-btn');
 
 const selModeRadios = document.querySelectorAll('input[name="selection-mode"]');
 selModeRadios.forEach(radio => {
@@ -457,3 +460,63 @@ modeCheckboxes.forEach(checkbox => {
 });
 
 document.getElementById('play-btn').addEventListener('click', toggleOscillator);
+
+function engageTurboMode() {
+    if (turboEngaged) return;
+
+    turboStateSnapshot = {
+        selectionMode: currentSelectionMode,
+        checkedModes: Array.from(modeCheckboxes).map(cb => cb.checked)
+    };
+
+    turboEngaged = true;
+    etaNoisBtn.classList.add('active');
+
+    currentSelectionMode = 1;
+    const comboRadio = document.getElementById('sel-combo');
+    comboRadio.checked = true;
+    setSelectionMode(1);
+
+    modeCheckboxes.forEach(cb => {
+        cb.checked = true;
+    });
+    updateMask();
+}
+
+function releaseTurboMode() {
+    if (!turboEngaged || !turboStateSnapshot) return;
+
+    currentSelectionMode = turboStateSnapshot.selectionMode;
+    const targetSelectionRadioId = currentSelectionMode === 1 ? 'sel-combo' : 'sel-authentic';
+    document.getElementById(targetSelectionRadioId).checked = true;
+    setSelectionMode(currentSelectionMode);
+
+    modeCheckboxes.forEach((cb, index) => {
+        cb.checked = turboStateSnapshot.checkedModes[index];
+    });
+
+    if (currentSelectionMode === 1) {
+        updateMask();
+    } else {
+        const checkedBox = Array.from(modeCheckboxes).find(cb => cb.checked) || modeCheckboxes[0];
+        checkedBox.checked = true;
+        modeCheckboxes.forEach(cb => {
+            if (cb !== checkedBox) cb.checked = false;
+        });
+        setMode(checkedBox.value);
+    }
+
+    turboEngaged = false;
+    turboStateSnapshot = null;
+    etaNoisBtn.classList.remove('active');
+}
+
+etaNoisBtn.addEventListener('mousedown', engageTurboMode);
+etaNoisBtn.addEventListener('touchstart', (event) => {
+    event.preventDefault();
+    engageTurboMode();
+}, { passive: false });
+etaNoisBtn.addEventListener('mouseup', releaseTurboMode);
+etaNoisBtn.addEventListener('mouseleave', releaseTurboMode);
+etaNoisBtn.addEventListener('touchend', releaseTurboMode);
+etaNoisBtn.addEventListener('touchcancel', releaseTurboMode);
