@@ -1,3 +1,4 @@
+import os
 from playwright.sync_api import sync_playwright
 
 def run_cuj(page):
@@ -16,7 +17,6 @@ def run_cuj(page):
 
     # Set file input
     # Upload one of the test samples
-    import os
     sample_path = os.path.abspath("samples/freesound_community-electric-guitar-phrase-38142.wav")
     page.set_input_files("#audio-upload", sample_path)
     page.wait_for_timeout(2000)
@@ -42,7 +42,6 @@ def run_cuj(page):
     page.wait_for_timeout(1000)  # Hold final state for the video
 
 if __name__ == "__main__":
-    import os
     os.makedirs("/home/jules/verification/videos", exist_ok=True)
     os.makedirs("/home/jules/verification/screenshots", exist_ok=True)
 
