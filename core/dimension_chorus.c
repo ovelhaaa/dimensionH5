@@ -62,6 +62,10 @@ void DimensionChorus_Init(DimensionChorusState* s)
     s->modeMask = 1; // Default: Mode 1 active
     s->mode = DIMENSION_MODE_1;
 
+    // Custom Mode defaults
+    s->useCustomParams = 0;
+    s->customParams = DimensionMode_GetParams(DIMENSION_MODE_1);
+
     // Fixed param
     s->dryGain = 0.84f;
 
@@ -122,11 +126,12 @@ static void DimensionChorus_ApplyParams(DimensionChorusState* s, DimensionModePa
     Dsp_BiquadCalcLPF(&s->wet2Lpf, params.lpf2Hz, WET_LPF_Q);
 }
 
-void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectionMode selMode)
+// Internal helper to resolve and apply current correct parameters
+static void DimensionChorus_ResolveParams(DimensionChorusState* s)
 {
-    s->selectionMode = selMode;
-
-    if (selMode == DIMENSION_SELECTION_SINGLE) {
+    if (s->useCustomParams) {
+        DimensionChorus_ApplyParams(s, s->customParams);
+    } else if (s->selectionMode == DIMENSION_SELECTION_SINGLE) {
         DimensionModeParams params = DimensionMode_GetParams(s->mode);
         DimensionChorus_ApplyParams(s, params);
     } else {
@@ -135,12 +140,17 @@ void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectio
     }
 }
 
+void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectionMode selMode)
+{
+    s->selectionMode = selMode;
+    DimensionChorus_ResolveParams(s);
+}
+
 void DimensionChorus_SetModeMask(DimensionChorusState* s, uint8_t mask)
 {
     s->modeMask = mask;
     if (s->selectionMode == DIMENSION_SELECTION_COMBO) {
-        DimensionModeParams params = DimensionMode_GetComboParams(mask);
-        DimensionChorus_ApplyParams(s, params);
+        DimensionChorus_ResolveParams(s);
     }
 }
 
@@ -154,15 +164,68 @@ void DimensionChorus_SetMode(DimensionChorusState* s, DimensionMode mode)
         // In single mode, selecting a mode also applies it immediately.
         // We update the mask so if we switch to combo mode, it reflects the last selection.
         s->modeMask = (1 << mode);
-        DimensionModeParams params = DimensionMode_GetParams(mode);
-        DimensionChorus_ApplyParams(s, params);
     } else {
         // Warning log for calling SetMode while in Combo Mode
         printf("WARNING: DimensionChorus_SetMode called while in COMBO mode. Mode set, but parameters are dictated by modeMask.\n");
         // Do not mutate s->modeMask to preserve the combo state.
-        DimensionModeParams params = DimensionMode_GetComboParams(s->modeMask);
-        DimensionChorus_ApplyParams(s, params);
     }
+    DimensionChorus_ResolveParams(s);
+}
+
+void DimensionChorus_EnableCustomParams(DimensionChorusState* s, int enabled)
+{
+    s->useCustomParams = enabled;
+    DimensionChorus_ResolveParams(s);
+}
+
+void DimensionChorus_LoadBaseModeToCustom(DimensionChorusState* s, DimensionMode mode)
+{
+    s->customParams = DimensionMode_GetParams(mode);
+    if (s->useCustomParams) {
+        DimensionChorus_ResolveParams(s);
+    }
+}
+
+// Helper to clamp values safely
+static float Dimension_Clampf(float val, float min, float max) {
+    if (val < min) return min;
+    if (val > max) return max;
+    return val;
+}
+
+void DimensionChorus_SetCustomParams(DimensionChorusState* s, DimensionModeParams params)
+{
+    // Apply safety clamps to prevent delay line overruns or filter explosion
+    params.rateHz = Dimension_Clampf(params.rateHz, 0.0f, 20.0f);
+    // Max delay buffer is usually huge but we restrict to reasonable chorus limits
+    params.baseMs = Dimension_Clampf(params.baseMs, 0.0f, 40.0f);
+    params.depthMs = Dimension_Clampf(params.depthMs, 0.0f, 20.0f);
+    params.mainWet = Dimension_Clampf(params.mainWet, 0.0f, 1.0f);
+    params.crossWet = Dimension_Clampf(params.crossWet, 0.0f, 1.0f);
+
+    // Filters
+    params.hpf1Hz = Dimension_Clampf(params.hpf1Hz, 20.0f, 1000.0f);
+    params.lpf1Hz = Dimension_Clampf(params.lpf1Hz, 200.0f, 20000.0f);
+    params.hpf2Hz = Dimension_Clampf(params.hpf2Hz, 20.0f, 1000.0f);
+    params.lpf2Hz = Dimension_Clampf(params.lpf2Hz, 200.0f, 20000.0f);
+
+    // Voice Trims
+    params.wet1Gain = Dimension_Clampf(params.wet1Gain, 0.0f, 2.0f);
+    params.wet2Gain = Dimension_Clampf(params.wet2Gain, 0.0f, 2.0f);
+
+    // B offsets
+    params.baseOffset2Ms = Dimension_Clampf(params.baseOffset2Ms, -20.0f, 20.0f);
+    params.depth2Scale = Dimension_Clampf(params.depth2Scale, 0.0f, 2.0f);
+
+    s->customParams = params;
+    if (s->useCustomParams) {
+        DimensionChorus_ResolveParams(s);
+    }
+}
+
+DimensionModeParams DimensionChorus_GetCustomParams(const DimensionChorusState* s)
+{
+    return s->customParams;
 }
 void DimensionChorus_ProcessBlock(
     DimensionChorusState* s,

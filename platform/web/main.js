@@ -48,6 +48,19 @@ async function initAudio() {
             } else {
                 updateMask();
             }
+            // Sync UI state to DSP
+            setSelectionMode(currentSelectionMode);
+            if (currentSelectionMode === 0) {
+                const checkedBoxes = Array.from(modeCheckboxes).filter(cb => cb.checked);
+                if (checkedBoxes.length > 0) {
+                    setMode(checkedBoxes[0].value);
+                    loadBaseMode(checkedBoxes[0].value);
+                }
+            } else {
+                updateMask();
+            }
+        } else if (e.data.type === 'customParamsUpdate') {
+            updateUIFromParams(e.data.params);
         } else if (e.data.type === 'error') {
             console.error('Worklet Error:', e.data.message);
             document.getElementById('status').innerText = 'Error: ' + e.data.message;
@@ -73,6 +86,30 @@ function setSelectionMode(selMode) {
 function setModeMask(mask) {
     if (chorusNode) {
         chorusNode.port.postMessage({ type: 'setModeMask', mask: parseInt(mask, 10) });
+    }
+}
+
+function enableCustomParams(enabled) {
+    if (chorusNode) {
+        chorusNode.port.postMessage({ type: 'enableCustomParams', enabled: enabled });
+    }
+}
+
+function loadBaseMode(mode) {
+    if (chorusNode) {
+        chorusNode.port.postMessage({ type: 'loadBaseMode', mode: parseInt(mode, 10) });
+    }
+}
+
+function setCustomParam(param, value) {
+    if (chorusNode) {
+        chorusNode.port.postMessage({ type: 'setCustomParam', param: param, value: parseFloat(value) });
+    }
+}
+
+function getCustomParams() {
+    if (chorusNode) {
+        chorusNode.port.postMessage({ type: 'getCustomParams' });
     }
 }
 
@@ -520,3 +557,270 @@ etaNoisBtn.addEventListener('mouseup', releaseTurboMode);
 etaNoisBtn.addEventListener('mouseleave', releaseTurboMode);
 etaNoisBtn.addEventListener('touchend', releaseTurboMode);
 etaNoisBtn.addEventListener('touchcancel', releaseTurboMode);
+
+// Custom Parameters UI Logic
+let baseParamsSnapshot = null;
+let isCustomMode = false;
+const editedBadge = document.getElementById('edited-badge');
+const expertToggle = document.getElementById('expert-toggle');
+const expertContent = document.getElementById('expert-content');
+
+expertToggle.addEventListener('click', () => {
+    expertToggle.classList.toggle('open');
+    expertContent.classList.toggle('open');
+});
+
+function markAsEdited() {
+    if (!isCustomMode) {
+        isCustomMode = true;
+        enableCustomParams(true);
+        editedBadge.style.display = 'inline-block';
+    }
+}
+
+function resetToPreset() {
+    isCustomMode = false;
+    enableCustomParams(false);
+    editedBadge.style.display = 'none';
+
+    // Determine which mode to reload
+    let modeToLoad = 0;
+    if (currentSelectionMode === 0) {
+        const checkedBox = Array.from(modeCheckboxes).find(cb => cb.checked);
+        if (checkedBox) modeToLoad = checkedBox.value;
+    }
+    loadBaseMode(modeToLoad);
+}
+
+document.getElementById('reset-preset-btn').addEventListener('click', resetToPreset);
+
+function updateUIFromParams(params) {
+    if (!isCustomMode) {
+        // Store as base preset reference when not editing
+        baseParamsSnapshot = { ...params };
+    }
+
+    // Quick Edit
+    document.getElementById('param-rate').value = params.rateHz;
+    document.getElementById('val-rate').innerText = params.rateHz.toFixed(2);
+
+    document.getElementById('param-depth').value = params.depthMs;
+    document.getElementById('val-depth').innerText = params.depthMs.toFixed(2);
+
+    document.getElementById('param-base').value = params.baseMs;
+    document.getElementById('val-base').innerText = params.baseMs.toFixed(2);
+
+    document.getElementById('param-mainwet').value = params.mainWet;
+    document.getElementById('val-mainwet').innerText = params.mainWet.toFixed(2);
+
+    document.getElementById('param-crosswet').value = params.crossWet;
+    document.getElementById('val-crosswet').innerText = params.crossWet.toFixed(2);
+
+    // Advanced
+    document.getElementById('param-offset2').value = params.baseOffset2Ms;
+    document.getElementById('val-offset2').innerText = params.baseOffset2Ms.toFixed(2);
+
+    document.getElementById('param-depth2scale').value = params.depth2Scale;
+    document.getElementById('val-depth2scale').innerText = params.depth2Scale.toFixed(2);
+
+    // Derived values for Balance
+    // bal is mapped from gain diff back to roughly [-1, 1].
+    // Our macro sets: gain2 += val * 0.15 (if val < 0), or gain1 -= val * 0.15 (if val > 0)
+    let bal = 0;
+    const diff = params.wet1Gain - params.wet2Gain;
+    if (diff > 0.01) { // gain1 > gain2 -> val was negative
+        bal = -diff / 0.15;
+    } else if (diff < -0.01) { // gain2 > gain1 -> val was positive
+        bal = -diff / 0.15;
+    }
+    bal = Math.max(-1, Math.min(1, bal));
+    document.getElementById('param-balance').value = bal;
+    document.getElementById('val-balance').innerText = bal.toFixed(2);
+
+    // Derived value for Tone (approximate mapping from HPF/LPF to 0-100)
+    // 0 = Dark (HPF 120, LPF 4000), 100 = Bright (HPF 250, LPF 5600)
+    const toneVal = Math.max(0, Math.min(100, (params.lpf1Hz - 4000) / 16));
+    document.getElementById('param-tone').value = toneVal;
+    document.getElementById('val-tone').innerText = Math.round(toneVal);
+
+    // Expert
+    document.getElementById('param-hpf1').value = params.hpf1Hz;
+    document.getElementById('val-hpf1').innerText = params.hpf1Hz.toFixed(0);
+
+    document.getElementById('param-lpf1').value = params.lpf1Hz;
+    document.getElementById('val-lpf1').innerText = params.lpf1Hz.toFixed(0);
+
+    document.getElementById('param-hpf2').value = params.hpf2Hz;
+    document.getElementById('val-hpf2').innerText = params.hpf2Hz.toFixed(0);
+
+    document.getElementById('param-lpf2').value = params.lpf2Hz;
+    document.getElementById('val-lpf2').innerText = params.lpf2Hz.toFixed(0);
+
+    document.getElementById('param-gain1').value = params.wet1Gain;
+    document.getElementById('val-gain1').innerText = params.wet1Gain.toFixed(2);
+
+    document.getElementById('param-gain2').value = params.wet2Gain;
+    document.getElementById('val-gain2').innerText = params.wet2Gain.toFixed(2);
+}
+
+const rangesConfig = {
+    safe: {
+        'param-rate': { min: 0.10, max: 0.80 },
+        'param-depth': { min: 0.20, max: 1.50 },
+        'param-base': { min: 8.0, max: 16.0 },
+        'param-mainwet': { min: 0.08, max: 0.40 },
+        'param-crosswet': { min: 0.05, max: 0.30 },
+        'param-offset2': { min: 0.00, max: 0.30 },
+        'param-depth2scale': { min: 0.80, max: 1.10 },
+        'param-hpf1': { min: 120, max: 250 },
+        'param-lpf1': { min: 4000, max: 5600 },
+        'param-hpf2': { min: 120, max: 250 },
+        'param-lpf2': { min: 4000, max: 5600 },
+        'param-gain1': { min: 0.88, max: 1.03 },
+        'param-gain2': { min: 0.88, max: 1.03 }
+    },
+    unlocked: {
+        'param-rate': { min: 0.01, max: 10.0 },
+        'param-depth': { min: 0.0, max: 10.0 },
+        'param-base': { min: 1.0, max: 30.0 },
+        'param-mainwet': { min: 0.0, max: 1.0 },
+        'param-crosswet': { min: 0.0, max: 1.0 },
+        'param-offset2': { min: -5.00, max: 5.00 },
+        'param-depth2scale': { min: 0.0, max: 2.0 },
+        'param-hpf1': { min: 20, max: 1000 },
+        'param-lpf1': { min: 200, max: 20000 },
+        'param-hpf2': { min: 20, max: 1000 },
+        'param-lpf2': { min: 200, max: 20000 },
+        'param-gain1': { min: 0.0, max: 2.0 },
+        'param-gain2': { min: 0.0, max: 2.0 }
+    }
+};
+
+const unlockRangesCb = document.getElementById('unlock-ranges-cb');
+unlockRangesCb.addEventListener('change', (e) => {
+    const mode = e.target.checked ? 'unlocked' : 'safe';
+    for (const [id, bounds] of Object.entries(rangesConfig[mode])) {
+        const el = document.getElementById(id);
+        if (el) {
+            // Must cast to string so Playwright / DOM treats it reliably
+            el.min = bounds.min.toString();
+            el.max = bounds.max.toString();
+        }
+    }
+});
+
+
+// Bind Sliders to WASM setters
+function bindSlider(id, paramName, formatter = (v) => v.toFixed(2)) {
+    const slider = document.getElementById(id);
+    const label = document.getElementById(id.replace('param-', 'val-'));
+    slider.addEventListener('input', (e) => {
+        markAsEdited();
+        label.innerText = formatter(parseFloat(e.target.value));
+        setCustomParam(paramName, e.target.value);
+    });
+}
+
+bindSlider('param-rate', 'rateHz');
+bindSlider('param-depth', 'depthMs');
+bindSlider('param-base', 'baseMs');
+bindSlider('param-mainwet', 'mainWet');
+bindSlider('param-crosswet', 'crossWet');
+bindSlider('param-offset2', 'baseOffset2Ms');
+bindSlider('param-depth2scale', 'depth2Scale');
+
+bindSlider('param-hpf1', 'hpf1Hz', v => v.toFixed(0));
+bindSlider('param-lpf1', 'lpf1Hz', v => v.toFixed(0));
+bindSlider('param-hpf2', 'hpf2Hz', v => v.toFixed(0));
+bindSlider('param-lpf2', 'lpf2Hz', v => v.toFixed(0));
+bindSlider('param-gain1', 'wet1Gain');
+bindSlider('param-gain2', 'wet2Gain');
+
+// Macros
+const toneSlider = document.getElementById('param-tone');
+const toneLabel = document.getElementById('val-tone');
+toneSlider.addEventListener('input', (e) => {
+    markAsEdited();
+    const val = parseFloat(e.target.value); // 0 to 100
+    toneLabel.innerText = Math.round(val);
+
+    // Map 0-100 to HPF 120-250 and LPF 4000-5600
+    const hpf = 120 + (val / 100) * 130;
+    const lpf = 4000 + (val / 100) * 1600;
+
+    setCustomParam('hpf1Hz', hpf);
+    setCustomParam('lpf1Hz', lpf);
+    setCustomParam('hpf2Hz', hpf);
+    setCustomParam('lpf2Hz', lpf);
+
+    // Update raw sliders visually if expert is open
+    document.getElementById('param-hpf1').value = hpf;
+    document.getElementById('val-hpf1').innerText = hpf.toFixed(0);
+    document.getElementById('param-lpf1').value = lpf;
+    document.getElementById('val-lpf1').innerText = lpf.toFixed(0);
+    document.getElementById('param-hpf2').value = hpf;
+    document.getElementById('val-hpf2').innerText = hpf.toFixed(0);
+    document.getElementById('param-lpf2').value = lpf;
+    document.getElementById('val-lpf2').innerText = lpf.toFixed(0);
+});
+
+const balanceSlider = document.getElementById('param-balance');
+const balanceLabel = document.getElementById('val-balance');
+balanceSlider.addEventListener('input', (e) => {
+    markAsEdited();
+    const val = parseFloat(e.target.value); // -1 to +1
+    balanceLabel.innerText = val.toFixed(2);
+
+    // Base gain is roughly 0.95-1.0
+    const baseGain = 1.0;
+    let gain1 = baseGain;
+    let gain2 = baseGain;
+
+    if (val < 0) {
+        gain2 += val * 0.15; // val is negative, so gain2 goes down
+    } else {
+        gain1 -= val * 0.15; // val is positive, so gain1 goes down
+    }
+
+    setCustomParam('wet1Gain', gain1);
+    setCustomParam('wet2Gain', gain2);
+
+    document.getElementById('param-gain1').value = gain1;
+    document.getElementById('val-gain1').innerText = gain1.toFixed(2);
+    document.getElementById('param-gain2').value = gain2;
+    document.getElementById('val-gain2').innerText = gain2.toFixed(2);
+});
+
+// Link Voices Logic
+const linkVoicesCb = document.getElementById('link-voices-cb');
+['hpf1', 'lpf1', 'gain1'].forEach(suffix => {
+    document.getElementById(`param-${suffix}`).addEventListener('input', (e) => {
+        if (linkVoicesCb.checked) {
+            const val = e.target.value;
+            const targetSuffix = suffix.replace('1', '2');
+            const targetName = suffix.replace('1', '2Hz').replace('gain1', 'wet2Gain');
+
+            document.getElementById(`param-${targetSuffix}`).value = val;
+            const numericVal = parseFloat(val);
+            const formattedVal = suffix.startsWith('gain') ? numericVal.toFixed(2) : numericVal.toFixed(0);
+            document.getElementById(`val-${targetSuffix}`).innerText = formattedVal;
+
+            // Re-fire for voice 2
+            setCustomParam(targetName, val);
+        }
+    });
+});
+
+// Update mode selection to handle preset loading
+modeCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+        if (currentSelectionMode === 0) {
+            if (e.target.checked) {
+                // ... (existing logic in main.js will run) ...
+                if (!isCustomMode) {
+                    loadBaseMode(e.target.value);
+                }
+            }
+        }
+    });
+});

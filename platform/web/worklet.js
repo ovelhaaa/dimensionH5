@@ -36,8 +36,56 @@ class DimensionChorusWorklet extends AudioWorkletProcessor {
                 if (this.initialized) {
                     this.wasmModule._dimension_reset();
                 }
+            } else if (data.type === 'enableCustomParams') {
+                if (this.initialized) this.wasmModule._dimension_enable_custom_params(data.enabled ? 1 : 0);
+            } else if (data.type === 'loadBaseMode') {
+                if (this.initialized) {
+                    this.wasmModule._dimension_load_base_mode(data.mode);
+                    this.syncCustomParamsToMain();
+                }
+            } else if (data.type === 'setCustomParam') {
+                if (this.initialized) {
+                    switch (data.param) {
+                        case 'rateHz': this.wasmModule._dimension_set_rate(data.value); break;
+                        case 'baseMs': this.wasmModule._dimension_set_base_ms(data.value); break;
+                        case 'depthMs': this.wasmModule._dimension_set_depth_ms(data.value); break;
+                        case 'mainWet': this.wasmModule._dimension_set_main_wet(data.value); break;
+                        case 'crossWet': this.wasmModule._dimension_set_cross_wet(data.value); break;
+                        case 'hpf1Hz': this.wasmModule._dimension_set_hpf_hz(1, data.value); break;
+                        case 'hpf2Hz': this.wasmModule._dimension_set_hpf_hz(2, data.value); break;
+                        case 'lpf1Hz': this.wasmModule._dimension_set_lpf_hz(1, data.value); break;
+                        case 'lpf2Hz': this.wasmModule._dimension_set_lpf_hz(2, data.value); break;
+                        case 'wet1Gain': this.wasmModule._dimension_set_wet_gain(1, data.value); break;
+                        case 'wet2Gain': this.wasmModule._dimension_set_wet_gain(2, data.value); break;
+                        case 'baseOffset2Ms': this.wasmModule._dimension_set_base_offset2_ms(data.value); break;
+                        case 'depth2Scale': this.wasmModule._dimension_set_depth2_scale(data.value); break;
+                    }
+                }
+            } else if (data.type === 'getCustomParams') {
+                if (this.initialized) {
+                    this.syncCustomParamsToMain();
+                }
             }
         };
+    }
+
+    syncCustomParamsToMain() {
+        const params = {
+            rateHz: this.wasmModule._dimension_get_rate(),
+            baseMs: this.wasmModule._dimension_get_base_ms(),
+            depthMs: this.wasmModule._dimension_get_depth_ms(),
+            mainWet: this.wasmModule._dimension_get_main_wet(),
+            crossWet: this.wasmModule._dimension_get_cross_wet(),
+            hpf1Hz: this.wasmModule._dimension_get_hpf_hz(1),
+            lpf1Hz: this.wasmModule._dimension_get_lpf_hz(1),
+            hpf2Hz: this.wasmModule._dimension_get_hpf_hz(2),
+            lpf2Hz: this.wasmModule._dimension_get_lpf_hz(2),
+            wet1Gain: this.wasmModule._dimension_get_wet_gain(1),
+            wet2Gain: this.wasmModule._dimension_get_wet_gain(2),
+            baseOffset2Ms: this.wasmModule._dimension_get_base_offset2_ms(),
+            depth2Scale: this.wasmModule._dimension_get_depth2_scale()
+        };
+        this.port.postMessage({ type: 'customParamsUpdate', params });
     }
 
     async initWasm(wasmBytes) {

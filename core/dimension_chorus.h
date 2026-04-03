@@ -21,6 +21,10 @@ typedef struct {
     uint8_t modeMask;     // Bitmask of active modes (Combo mode)
     DimensionMode mode;   // Currently active single mode (Authentic mode)
 
+    // Custom Mode State
+    int useCustomParams;               // Flag to indicate custom parameters override preset modes
+    DimensionModeParams customParams;  // Custom parameters currently in use
+
     // Target control parameters (for the chosen mode)
     float targetRate;
     float targetBaseMs;
@@ -93,6 +97,35 @@ void DimensionChorus_SetSelectionMode(DimensionChorusState* s, DimensionSelectio
  * @param mask Bitmask of active modes (bit 0 = Mode 1, bit 1 = Mode 2, etc.).
  */
 void DimensionChorus_SetModeMask(DimensionChorusState* s, uint8_t mask);
+
+/**
+ * @brief Enable or disable custom parameters overriding presets.
+ * @param s State pointer.
+ * @param enabled 1 to enable custom parameters, 0 to disable and return to presets.
+ */
+void DimensionChorus_EnableCustomParams(DimensionChorusState* s, int enabled);
+
+/**
+ * @brief Load a preset mode's parameters into the custom parameter state, but do NOT automatically enable custom parameters.
+ * @param s State pointer.
+ * @param mode Target dimension mode (0-3).
+ */
+void DimensionChorus_LoadBaseModeToCustom(DimensionChorusState* s, DimensionMode mode);
+
+/**
+ * @brief Update the custom parameters state. This applies immediately if custom params are enabled.
+ * @param s State pointer.
+ * @param params The new custom parameters.
+ */
+void DimensionChorus_SetCustomParams(DimensionChorusState* s, DimensionModeParams params);
+
+/**
+ * @brief Get the current custom parameters state.
+ * @param s State pointer.
+ * @return DimensionModeParams The current custom parameters.
+ */
+DimensionModeParams DimensionChorus_GetCustomParams(const DimensionChorusState* s);
+
 
 /**
  * @brief Process an audio block. Mono in, Stereo out.
