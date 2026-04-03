@@ -801,7 +801,9 @@ const linkVoicesCb = document.getElementById('link-voices-cb');
             const targetName = suffix.replace('1', '2Hz').replace('gain1', 'wet2Gain');
 
             document.getElementById(`param-${targetSuffix}`).value = val;
-            document.getElementById(`val-${targetSuffix}`).innerText = val;
+            const numericVal = parseFloat(val);
+            const formattedVal = suffix.startsWith('gain') ? numericVal.toFixed(2) : numericVal.toFixed(0);
+            document.getElementById(`val-${targetSuffix}`).innerText = formattedVal;
 
             // Re-fire for voice 2
             setCustomParam(targetName, val);
