@@ -47,6 +47,15 @@ On every push to `main`, it will:
 2. Build the WASM binary.
 3. Deploy `index.html`, `main.js`, `worklet.js`, and the `dist/` directory to GitHub Pages.
 
+## Custom Parameters Architecture
+
+The Web UI allows for deep tweaking of the core DSP parameters while still retaining the ability to behave exactly like the original 4-button hardware.
+
+1. **State**: The `DimensionChorusState` maintains a `customParams` struct alongside its standard preset logic.
+2. **Override**: A `useCustomParams` flag determines if the core resolves to the authentic/combo presets or overrides them with the user's custom tweaked parameters.
+3. **Workflow**: By default, the unit boots into Authentic mode loading Mode 1. As the user clicks the 1-4 buttons, the corresponding base parameters are loaded into the custom parameter cache (`dimension_load_base_mode`). The moment a user moves a slider in the UI, `dimension_enable_custom_params` is triggered, an "Edited" badge appears, and the core instantly switches to using the custom param cache, allowing seamless tweaking of rate, depth, filters, offsets, etc.
+4. **Macros**: The UI provides "Tone" and "Voice Balance" sliders. These are not native DSP variables; instead, the JS layer calculates the required HPF/LPF mappings and Voice Gain values and dispatches multiple custom param updates to the WASM core simultaneously.
+
 ## Limitations & Future Work
 
 - **Sample Rate**: The DSP core uses a fixed macro `DSP_SAMPLE_RATE` of 48000.0f. The web application currently enforces this rate via `AudioContext({ sampleRate: 48000 })`. If the browser cannot native operate at this rate, the Web Audio API handles resampling automatically before it reaches our WASM code.

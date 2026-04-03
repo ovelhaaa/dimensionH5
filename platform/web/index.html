@@ -317,6 +317,101 @@
         .instructions a:hover {
             text-decoration: underline;
         }
+
+        /* Custom Parameters Styling */
+        .custom-params-section {
+            width: 100%;
+            margin-top: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 1rem;
+            text-align: left;
+        }
+
+        .custom-params-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .badge {
+            background-color: #ff5a1f;
+            color: #fff;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: none;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            gap: 1rem;
+        }
+
+        .slider-group label {
+            width: 120px;
+            font-size: 0.8rem;
+            color: #ddd;
+            text-align: right;
+        }
+
+        .slider-group input[type=range] {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .slider-group input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #8a2be2;
+            cursor: pointer;
+        }
+
+        .slider-value {
+            width: 40px;
+            font-size: 0.8rem;
+            color: #aaa;
+            text-align: left;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            color: #fff;
+            margin-bottom: 1rem;
+            margin-top: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+
+        .toggle-section {
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle-section::before {
+            content: '▶ ';
+            font-size: 0.8rem;
+        }
+        .toggle-section.open::before {
+            content: '▼ ';
+        }
+        .collapsible-content {
+            display: none;
+            padding-left: 1rem;
+            border-left: 2px solid rgba(255,255,255,0.1);
+            margin-bottom: 1rem;
+        }
+        .collapsible-content.open {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -390,6 +485,105 @@
                     <label for="mode3">4</label>
                 </div>
             </div>
+
+            <div class="custom-params-section">
+                <div class="custom-params-header">
+                    <span class="mode-label" style="margin: 0;">CUSTOM TWEAKS <span id="edited-badge" class="badge">EDITED</span></span>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label title="Unlock extended parameter ranges" style="font-size: 0.8rem; color: #888; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="unlock-ranges-cb" style="margin:0; vertical-align: middle;"> 🔓
+                        </label>
+                        <button id="reset-preset-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin: 0; background-color: #555;">Reset to Preset</button>
+                    </div>
+                </div>
+
+                <div class="section-title">Quick Edit</div>
+                <div class="slider-group">
+                    <label title="LFO Rate (rateHz)">Motion</label>
+                    <input type="range" id="param-rate" min="0.10" max="0.80" step="0.01" value="0.25">
+                    <span class="slider-value" id="val-rate">0.25</span>
+                </div>
+                <div class="slider-group">
+                    <label title="Modulation Depth (depthMs)">Depth</label>
+                    <input type="range" id="param-depth" min="0.20" max="1.50" step="0.01" value="0.5">
+                    <span class="slider-value" id="val-depth">0.5</span>
+                </div>
+                <div class="slider-group">
+                    <label title="Base Delay (baseMs)">Size</label>
+                    <input type="range" id="param-base" min="8.0" max="16.0" step="0.1" value="10.0">
+                    <span class="slider-value" id="val-base">10.0</span>
+                </div>
+                <div class="slider-group">
+                    <label title="Main Wet Level (mainWet)">Presence</label>
+                    <input type="range" id="param-mainwet" min="0.08" max="0.40" step="0.01" value="0.25">
+                    <span class="slider-value" id="val-mainwet">0.25</span>
+                </div>
+                <div class="slider-group">
+                    <label title="Cross Wet Level (crossWet)">Width</label>
+                    <input type="range" id="param-crosswet" min="0.05" max="0.30" step="0.01" value="0.15">
+                    <span class="slider-value" id="val-crosswet">0.15</span>
+                </div>
+
+                <div class="section-title">Advanced</div>
+                <div class="slider-group">
+                    <label title="Macro for HPF/LPF on both voices">Tone</label>
+                    <input type="range" id="param-tone" min="0" max="100" step="1" value="50">
+                    <span class="slider-value" id="val-tone">50</span>
+                </div>
+                <div style="text-align: right; margin-bottom: 0.5rem;">
+                    <label style="font-size: 0.7rem; color: #aaa;"><input type="checkbox" id="link-voices-cb" checked> Link Filters (A/B)</label>
+                </div>
+                <div class="slider-group">
+                    <label title="Voice B Delay Offset (baseOffset2Ms)">Voice Offset</label>
+                    <input type="range" id="param-offset2" min="0.00" max="0.30" step="0.01" value="0.00">
+                    <span class="slider-value" id="val-offset2">0.00</span>
+                </div>
+                <div class="slider-group">
+                    <label title="Voice A/B Gain Balance">Voice Balance</label>
+                    <input type="range" id="param-balance" min="-1" max="1" step="0.05" value="0">
+                    <span class="slider-value" id="val-balance">0</span>
+                </div>
+                <div class="slider-group">
+                    <label title="Voice B Depth Scale (depth2Scale)">Asymmetry</label>
+                    <input type="range" id="param-depth2scale" min="0.80" max="1.10" step="0.01" value="1.00">
+                    <span class="slider-value" id="val-depth2scale">1.00</span>
+                </div>
+
+                <div class="section-title toggle-section" id="expert-toggle">Expert Settings</div>
+                <div class="collapsible-content" id="expert-content">
+                    <div class="slider-group">
+                        <label>Voice A HPF</label>
+                        <input type="range" id="param-hpf1" min="120" max="250" step="1" value="150">
+                        <span class="slider-value" id="val-hpf1">150</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Voice A LPF</label>
+                        <input type="range" id="param-lpf1" min="4000" max="5600" step="10" value="4500">
+                        <span class="slider-value" id="val-lpf1">4500</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Voice B HPF</label>
+                        <input type="range" id="param-hpf2" min="120" max="250" step="1" value="150">
+                        <span class="slider-value" id="val-hpf2">150</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Voice B LPF</label>
+                        <input type="range" id="param-lpf2" min="4000" max="5600" step="10" value="4500">
+                        <span class="slider-value" id="val-lpf2">4500</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Voice A Gain</label>
+                        <input type="range" id="param-gain1" min="0.88" max="1.03" step="0.01" value="1.0">
+                        <span class="slider-value" id="val-gain1">1.0</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Voice B Gain</label>
+                        <input type="range" id="param-gain2" min="0.88" max="1.03" step="0.01" value="1.0">
+                        <span class="slider-value" id="val-gain2">1.0</span>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
