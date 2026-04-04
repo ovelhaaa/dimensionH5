@@ -27,7 +27,7 @@
                 inset 0 2px 4px rgba(255,255,255,0.3),
                 inset 0 -5px 15px rgba(0,0,0,0.4);
             display: inline-block;
-            max-width: 600px;
+            max-width: 800px;
             width: 100%;
             position: relative;
             border: 2px solid #2a2a2a;
@@ -275,6 +275,7 @@
             overflow: hidden;
             border: 1px solid rgba(255,255,255,0.1);
             margin-bottom: 0.5rem;
+            justify-content: center;
         }
 
         .playback-toggle input[type="radio"] {
@@ -361,19 +362,34 @@
         .slider-group input[type=range] {
             flex-grow: 1;
             -webkit-appearance: none;
-            height: 4px;
+            height: 6px;
             background: rgba(255,255,255,0.2);
-            border-radius: 2px;
+            border-radius: 3px;
             outline: none;
+            transition: opacity 0.3s ease;
         }
 
         .slider-group input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 12px;
-            height: 12px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             background: #8a2be2;
             cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        /* Dim sliders when not in custom mode */
+        .hardware-container:not(.custom-mode-active) .slider-group input[type=range] {
+            opacity: 0.4;
+        }
+
+        .hardware-container:not(.custom-mode-active) .slider-group input[type=range]::-webkit-slider-thumb {
+            background: #555;
+        }
+
+        .hardware-container:not(.custom-mode-active) .slider-group input[type=range]::-moz-range-thumb {
+            background: #555;
         }
 
         .slider-value {
@@ -412,6 +428,52 @@
         .collapsible-content.open {
             display: block;
         }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 600px) {
+            body {
+                padding: 0.5rem;
+            }
+            .hardware-container {
+                padding: 1.5rem 1rem;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            .controls {
+                padding: 1rem;
+            }
+            .slider-group {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin-bottom: 1.2rem;
+            }
+            .slider-group label {
+                width: 100%;
+                text-align: left;
+                margin-bottom: 0.2rem;
+            }
+            .slider-group input[type=range] {
+                width: calc(100% - 50px);
+                flex-grow: unset;
+            }
+            .custom-params-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .custom-params-header > div {
+                flex-wrap: wrap;
+            }
+            button {
+                padding: 0.6rem 1rem;
+                font-size: 0.9rem;
+            }
+            .radio-group label {
+                width: 40px;
+                height: 25px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -434,14 +496,6 @@
                 <div id="file-info" style="font-size: 0.8rem; color: #aaa; margin-bottom: 1rem; display: none;">
                     <span id="file-name" style="color: #fff; font-weight: bold;"></span><br>
                     <span id="file-details"></span>
-                </div>
-
-                <div class="playback-toggle" id="playback-toggle-container" style="display: none;">
-                    <input type="radio" id="toggle-orig" name="playback-mode" value="original" checked>
-                    <label for="toggle-orig">Original</label>
-
-                    <input type="radio" id="toggle-proc" name="playback-mode" value="processed">
-                    <label for="toggle-proc">Processed</label>
                 </div>
 
                 <div class="progress-container" id="progress-container" style="display: none;">
@@ -486,10 +540,21 @@
                 </div>
             </div>
 
+            <div class="playback-toggle" id="playback-toggle-container" style="display: none; margin-top: 1rem; margin-bottom: 1.5rem;">
+                <input type="radio" id="toggle-orig" name="playback-mode" value="original" checked>
+                <label for="toggle-orig">Original</label>
+
+                <input type="radio" id="toggle-proc" name="playback-mode" value="processed">
+                <label for="toggle-proc">Processed (DSP)</label>
+            </div>
+
             <div class="custom-params-section">
                 <div class="custom-params-header">
                     <span class="mode-label" style="margin: 0;">CUSTOM TWEAKS <span id="edited-badge" class="badge">EDITED</span></span>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <button id="save-json-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin: 0; background-color: #4CAF50;">Save JSON</button>
+                        <button id="load-json-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin: 0; background-color: #2196F3;">Load JSON</button>
+                        <input type="file" id="load-json-input" accept=".json" style="display: none;">
                         <label title="Unlock extended parameter ranges" style="font-size: 0.8rem; color: #888; cursor: pointer; user-select: none;">
                             <input type="checkbox" id="unlock-ranges-cb" style="margin:0; vertical-align: middle;"> 🔓
                         </label>
