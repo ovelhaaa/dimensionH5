@@ -60,6 +60,7 @@ async function initAudio() {
                 updateMask();
             }
         } else if (e.data.type === 'customParamsUpdate') {
+            currentDSPParams = e.data.params;
             updateUIFromParams(e.data.params);
         } else if (e.data.type === 'error') {
             console.error('Worklet Error:', e.data.message);
@@ -575,6 +576,7 @@ function markAsEdited() {
         isCustomMode = true;
         enableCustomParams(true);
         editedBadge.style.display = 'inline-block';
+        document.querySelector('.hardware-container').classList.add('custom-mode-active');
     }
 }
 
@@ -582,6 +584,7 @@ function resetToPreset() {
     isCustomMode = false;
     enableCustomParams(false);
     editedBadge.style.display = 'none';
+    document.querySelector('.hardware-container').classList.remove('custom-mode-active');
 
     // Determine which mode to reload
     let modeToLoad = 0;
@@ -662,6 +665,66 @@ function updateUIFromParams(params) {
     document.getElementById('param-gain2').value = params.wet2Gain;
     document.getElementById('val-gain2').innerText = params.wet2Gain.toFixed(2);
 }
+
+// Save / Load JSON
+let currentDSPParams = null; // To hold the latest params for saving
+
+// Listen to customParamsUpdate to update currentDSPParams
+const originalUpdateUIFromParams = updateUIFromParams;
+updateUIFromParams = function(params) {
+    currentDSPParams = params;
+    originalUpdateUIFromParams(params);
+};
+
+document.getElementById('save-json-btn').addEventListener('click', () => {
+    if (!currentDSPParams) {
+        // If we don't have current params, fetch them first
+        getCustomParams();
+        setTimeout(() => {
+            if (currentDSPParams) triggerSaveJSON();
+        }, 100); // Wait a bit for async return
+    } else {
+        triggerSaveJSON();
+    }
+});
+
+function triggerSaveJSON() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentDSPParams, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "dimension_chorus_preset.json");
+    dlAnchorElem.click();
+}
+
+document.getElementById('load-json-btn').addEventListener('click', () => {
+    document.getElementById('load-json-input').click();
+});
+
+document.getElementById('load-json-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const params = JSON.parse(event.target.result);
+            markAsEdited(); // Ensure we are in custom mode
+
+            // Set each param to DSP
+            for (const [key, value] of Object.entries(params)) {
+                setCustomParam(key, value);
+            }
+
+            // Re-fetch to update UI from DSP to ensure bounds are respected
+            getCustomParams();
+        } catch (err) {
+            console.error("Failed to parse JSON preset:", err);
+            alert("Invalid JSON preset file.");
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+});
 
 const rangesConfig = {
     safe: {
