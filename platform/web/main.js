@@ -663,17 +663,20 @@ function applySoundState(state) {
     }
 
     isCustomMode = !!state.isCustomMode;
-    enableCustomParams(isCustomMode);
-    setCustomModeUI(isCustomMode);
 
     if (isCustomMode && state.params) {
-        // Only apply custom params when in custom mode
+        // Apply params before enabling custom mode to avoid repeated full
+        // custom-state resolves while restoring from saved state.
         Object.entries(state.params).forEach(([key, value]) => {
             setCustomParam(key, value);
         });
-        currentDSPParams = { ...state.params };
-        updateUIFromParams(state.params);
-    } else if (!isCustomMode) {
+        updateUIFromParams({ ...state.params });
+    }
+
+    enableCustomParams(isCustomMode);
+    setCustomModeUI(isCustomMode);
+
+    if (!isCustomMode) {
         // When not in custom mode, reload the base preset
         let modeToLoad = 0;
         if (currentSelectionMode === 0) {
