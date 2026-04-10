@@ -438,6 +438,52 @@
             display: block;
         }
 
+        .manual-edit-help {
+            margin: 0.4rem 0 0.9rem 0;
+            padding: 0.6rem 0.8rem;
+            border-radius: 6px;
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.12);
+            font-size: 0.76rem;
+            color: #d9d9d9;
+            line-height: 1.4;
+        }
+
+        .range-mode-label {
+            font-size: 0.72rem;
+            color: #cfcfcf;
+            letter-spacing: 0.3px;
+        }
+
+        .temp-presets {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.7rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(0,0,0,0.18);
+        }
+
+        .temp-presets-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .temp-presets-actions button {
+            margin: 0;
+            padding: 0.35rem 0.55rem;
+            font-size: 0.68rem;
+            text-transform: none;
+        }
+
+        .temp-presets-status {
+            font-size: 0.72rem;
+            color: #d4d4d4;
+        }
+
         /* Mobile Responsiveness */
         @media (max-width: 600px) {
             body {
@@ -565,10 +611,27 @@
                         <button id="save-json-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin: 0; background-color: #4CAF50;">Save JSON</button>
                         <button id="load-json-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin: 0; background-color: #2196F3;">Load JSON</button>
                         <input type="file" id="load-json-input" accept=".json" style="display: none;">
-                        <label title="Unlock extended parameter ranges" style="font-size: 0.8rem; color: #888; cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="unlock-ranges-cb" style="margin:0; vertical-align: middle;"> 🔓
+                        <label title="Safe = limites recomendados. Extended = faixa completa para edição manual." style="font-size: 0.8rem; color: #ddd; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.35rem;">
+                            <span class="range-mode-label">Safe</span>
+                            <input type="checkbox" id="unlock-ranges-cb" style="margin:0; vertical-align: middle;">
+                            <span class="range-mode-label">Extended</span>
                         </label>
                         <button id="reset-preset-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin: 0; background-color: #555;">Reset to Preset</button>
+                    </div>
+                </div>
+                <div class="manual-edit-help">
+                    Edição manual de parâmetros: em <strong>Safe</strong> você fica nos limites recomendados.
+                    Ative <strong>Extended</strong> para desbloquear o alcance total dos sliders.
+                </div>
+
+                <div class="temp-presets">
+                    <div class="temp-presets-status" id="temp-presets-status">Comparação rápida: salve A/B e carregue sem perder o estado atual.</div>
+                    <div class="temp-presets-actions">
+                        <button id="save-temp-a-btn" style="background-color:#4b6cb7;">Salvar Temp A</button>
+                        <button id="load-temp-a-btn" style="background-color:#37528c;" disabled>Ouvir Temp A</button>
+                        <button id="save-temp-b-btn" style="background-color:#c06c84;">Salvar Temp B</button>
+                        <button id="load-temp-b-btn" style="background-color:#9a5367;" disabled>Ouvir Temp B</button>
+                        <button id="return-current-btn" style="background-color:#666;" disabled>Voltar ao estado atual</button>
                     </div>
                 </div>
 

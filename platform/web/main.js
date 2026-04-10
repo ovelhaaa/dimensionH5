@@ -590,6 +590,7 @@ let isCustomMode = false;
 const editedBadge = document.getElementById('edited-badge');
 const expertToggle = document.getElementById('expert-toggle');
 const expertContent = document.getElementById('expert-content');
+const tempPresetsStatus = document.getElementById('temp-presets-status');
 
 expertToggle.addEventListener('click', () => {
     expertToggle.classList.toggle('open');
@@ -600,16 +601,24 @@ function markAsEdited() {
     if (!isCustomMode) {
         isCustomMode = true;
         enableCustomParams(true);
+        setCustomModeUI(true);
+    }
+}
+
+function setCustomModeUI(active) {
+    if (active) {
         editedBadge.style.display = 'inline-block';
         document.querySelector('.hardware-container').classList.add('custom-mode-active');
+    } else {
+        editedBadge.style.display = 'none';
+        document.querySelector('.hardware-container').classList.remove('custom-mode-active');
     }
 }
 
 function resetToPreset() {
     isCustomMode = false;
     enableCustomParams(false);
-    editedBadge.style.display = 'none';
-    document.querySelector('.hardware-container').classList.remove('custom-mode-active');
+    setCustomModeUI(false);
 
     // Determine which mode to reload
     let modeToLoad = 0;
@@ -621,6 +630,59 @@ function resetToPreset() {
 }
 
 document.getElementById('reset-preset-btn').addEventListener('click', resetToPreset);
+
+function captureSoundState() {
+    return {
+        selectionMode: currentSelectionMode,
+        checkedModes: Array.from(modeCheckboxes).map(cb => cb.checked),
+        isCustomMode,
+        params: currentDSPParams ? { ...currentDSPParams } : null
+    };
+}
+
+function applySoundState(state) {
+    if (!state) return;
+
+    currentSelectionMode = state.selectionMode;
+    document.getElementById(currentSelectionMode === 1 ? 'sel-combo' : 'sel-authentic').checked = true;
+    setSelectionMode(currentSelectionMode);
+
+    modeCheckboxes.forEach((cb, index) => {
+        cb.checked = !!state.checkedModes[index];
+    });
+
+    if (currentSelectionMode === 1) {
+        updateMask();
+    } else {
+        const checkedBox = Array.from(modeCheckboxes).find(cb => cb.checked) || modeCheckboxes[0];
+        checkedBox.checked = true;
+        modeCheckboxes.forEach(cb => {
+            if (cb !== checkedBox) cb.checked = false;
+        });
+        setMode(checkedBox.value);
+    }
+
+    isCustomMode = !!state.isCustomMode;
+    enableCustomParams(isCustomMode);
+    setCustomModeUI(isCustomMode);
+
+    if (isCustomMode && state.params) {
+        // Only apply custom params when in custom mode
+        Object.entries(state.params).forEach(([key, value]) => {
+            setCustomParam(key, value);
+        });
+        currentDSPParams = { ...state.params };
+        updateUIFromParams(state.params);
+    } else if (!isCustomMode) {
+        // When not in custom mode, reload the base preset
+        let modeToLoad = 0;
+        if (currentSelectionMode === 0) {
+            const checkedBox = Array.from(modeCheckboxes).find(cb => cb.checked);
+            if (checkedBox) modeToLoad = parseInt(checkedBox.value, 10);
+        }
+        loadBaseMode(modeToLoad);
+    }
+}
 
 function updateUIFromParams(params) {
     if (!isCustomMode) {
@@ -797,6 +859,65 @@ unlockRangesCb.addEventListener('change', (e) => {
     }
 });
 
+// Temporary A/B preset compare
+let tempPresetA = null;
+let tempPresetB = null;
+let compareBaselineState = null;
+
+const saveTempABtn = document.getElementById('save-temp-a-btn');
+const loadTempABtn = document.getElementById('load-temp-a-btn');
+const saveTempBBtn = document.getElementById('save-temp-b-btn');
+const loadTempBBtn = document.getElementById('load-temp-b-btn');
+const returnCurrentBtn = document.getElementById('return-current-btn');
+
+function updateTempPresetStatus(message) {
+    tempPresetsStatus.innerText = message;
+}
+
+function saveTempPreset(slot) {
+    const state = captureSoundState();
+    if (!state.params) {
+        updateTempPresetStatus('Ainda sem parâmetros ativos para salvar. Toque/edite algo primeiro.');
+        return;
+    }
+
+    if (slot === 'A') {
+        tempPresetA = state;
+        loadTempABtn.disabled = false;
+    } else {
+        tempPresetB = state;
+        loadTempBBtn.disabled = false;
+    }
+    updateTempPresetStatus(`Preset temporário ${slot} salvo.`);
+}
+
+function loadTempPreset(slot) {
+    const preset = slot === 'A' ? tempPresetA : tempPresetB;
+    if (!preset) return;
+
+    if (!compareBaselineState) {
+        compareBaselineState = captureSoundState();
+    }
+
+    applySoundState(preset);
+    returnCurrentBtn.disabled = false;
+    updateTempPresetStatus(`Ouvindo Temp ${slot}. Você pode alternar entre A/B sem perder o estado atual.`);
+}
+
+function restoreCurrentState() {
+    if (!compareBaselineState) return;
+    applySoundState(compareBaselineState);
+    compareBaselineState = null;
+    returnCurrentBtn.disabled = true;
+    updateTempPresetStatus('Estado atual restaurado.');
+}
+
+saveTempABtn.addEventListener('click', () => saveTempPreset('A'));
+saveTempBBtn.addEventListener('click', () => saveTempPreset('B'));
+loadTempABtn.addEventListener('click', () => loadTempPreset('A'));
+loadTempBBtn.addEventListener('click', () => loadTempPreset('B'));
+returnCurrentBtn.addEventListener('click', restoreCurrentState);
+
 
 // Bind Sliders to WASM setters
 function bindSlider(id, paramName, formatter = (v) => v.toFixed(2)) {
@@ -805,6 +926,10 @@ function bindSlider(id, paramName, formatter = (v) => v.toFixed(2)) {
     slider.addEventListener('input', (e) => {
         markAsEdited();
         label.innerText = formatter(parseFloat(e.target.value));
+        const value = parseFloat(e.target.value);
+        // Update currentDSPParams synchronously so captureSoundState gets latest values
+        if (!currentDSPParams) currentDSPParams = {};
+        currentDSPParams[paramName] = value;
         setCustomParam(paramName, e.target.value);
     });
 }
@@ -835,6 +960,13 @@ toneSlider.addEventListener('input', (e) => {
     // Map 0-100 to HPF 120-250 and LPF 4000-5600
     const hpf = 120 + (val / 100) * 130;
     const lpf = 4000 + (val / 100) * 1600;
+
+    // Update currentDSPParams synchronously so captureSoundState gets latest values
+    if (!currentDSPParams) currentDSPParams = {};
+    currentDSPParams['hpf1Hz'] = hpf;
+    currentDSPParams['lpf1Hz'] = lpf;
+    currentDSPParams['hpf2Hz'] = hpf;
+    currentDSPParams['lpf2Hz'] = lpf;
 
     setCustomParam('hpf1Hz', hpf);
     setCustomParam('lpf1Hz', lpf);
@@ -870,6 +1002,11 @@ balanceSlider.addEventListener('input', (e) => {
         gain1 -= val * 0.15; // val is positive, so gain1 goes down
     }
 
+    // Update currentDSPParams synchronously so captureSoundState gets latest values
+    if (!currentDSPParams) currentDSPParams = {};
+    currentDSPParams['wet1Gain'] = gain1;
+    currentDSPParams['wet2Gain'] = gain2;
+
     setCustomParam('wet1Gain', gain1);
     setCustomParam('wet2Gain', gain2);
 
@@ -892,6 +1029,10 @@ const linkVoicesCb = document.getElementById('link-voices-cb');
             const numericVal = parseFloat(val);
             const formattedVal = suffix.startsWith('gain') ? numericVal.toFixed(2) : numericVal.toFixed(0);
             document.getElementById(`val-${targetSuffix}`).innerText = formattedVal;
+
+            // Update currentDSPParams synchronously so captureSoundState gets latest values
+            if (!currentDSPParams) currentDSPParams = {};
+            currentDSPParams[targetName] = numericVal;
 
             // Re-fire for voice 2
             setCustomParam(targetName, val);
