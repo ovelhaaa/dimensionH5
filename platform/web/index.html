@@ -213,6 +213,15 @@
             background-color: #444;
         }
 
+        .transport-controls #repeat-btn {
+            background-color: #3f3f3f;
+        }
+
+        .transport-controls #repeat-btn.active {
+            background-color: #8a2be2;
+            box-shadow: 0 0 10px rgba(138, 43, 226, 0.8);
+        }
+
         .turbo-btn {
             margin-top: 0.75rem;
             background-color: #8a2be2;
@@ -507,6 +516,7 @@
                 <div class="transport-controls" id="transport-controls" style="display: none;">
                     <button id="play-pause-btn">Play</button>
                     <button id="stop-btn">Stop</button>
+                    <button id="repeat-btn" title="Repetir o áudio automaticamente ao chegar no fim.">Repeat: Off</button>
                 </div>
 
                 <div id="upload-error" style="color: #ff5555; font-size: 0.8rem; margin-top: 0.5rem; display: none;"></div>
