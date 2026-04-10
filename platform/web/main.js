@@ -670,7 +670,7 @@ function applySoundState(state) {
         Object.entries(state.params).forEach(([key, value]) => {
             setCustomParam(key, value);
         });
-        updateUIFromParams(state.params);
+        updateUIFromParams({ ...state.params });
     }
 
     enableCustomParams(isCustomMode);
