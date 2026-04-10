@@ -121,6 +121,7 @@ let currentDownmixer = null;
 
 let playbackMode = "original"; // "original" or "processed"
 let playbackState = "stopped"; // "stopped", "playing", "paused"
+let repeatEnabled = false;
 let startTime = 0;
 let pauseOffset = 0;
 let duration = 0;
@@ -140,6 +141,7 @@ const toggleProc = document.getElementById('toggle-proc');
 const transportControls = document.getElementById('transport-controls');
 const playPauseBtn = document.getElementById('play-pause-btn');
 const stopBtn = document.getElementById('stop-btn');
+const repeatBtn = document.getElementById('repeat-btn');
 
 const progressContainer = document.getElementById('progress-container');
 const progressBar = document.getElementById('progress-bar');
@@ -154,7 +156,10 @@ function formatTime(seconds) {
 
 function updateProgressUI() {
     if (playbackState === "playing") {
-        const currentTime = audioContext.currentTime - startTime + pauseOffset;
+        const elapsedTime = audioContext.currentTime - startTime + pauseOffset;
+        const currentTime = repeatEnabled && duration > 0
+            ? elapsedTime % duration
+            : elapsedTime;
         if (currentTime >= duration) {
             // Let the onended handler take care of stopping
             progressBar.value = duration;
@@ -294,6 +299,7 @@ async function startPlayback(offset) {
 
     currentSource = audioContext.createBufferSource();
     currentSource.buffer = decodedBuffer;
+    currentSource.loop = repeatEnabled;
 
     if (playbackMode === "processed") {
         currentDownmixer = audioContext.createGain();
@@ -308,6 +314,7 @@ async function startPlayback(offset) {
 
     // Handle end of playback
     currentSource.onended = () => {
+        if (repeatEnabled) return;
         // Only stop if we actually reached the end naturally, not because we called stop() or seeked
         if (playbackState === "playing") {
             const currentTime = audioContext.currentTime - startTime + pauseOffset;
@@ -380,10 +387,28 @@ function handleModeChange(event) {
     }
 }
 
+function updateRepeatButtonUI() {
+    repeatBtn.innerText = repeatEnabled ? 'Repeat: On' : 'Repeat: Off';
+    repeatBtn.classList.toggle('active', repeatEnabled);
+}
+
+function toggleRepeat() {
+    repeatEnabled = !repeatEnabled;
+    updateRepeatButtonUI();
+
+    // Rebuild source node to apply loop mode while preserving position.
+    if (playbackState === "playing") {
+        const currentTime = audioContext.currentTime - startTime + pauseOffset;
+        startPlayback(currentTime % duration);
+    }
+}
+
 audioUpload.addEventListener('change', handleFileUpload);
 playPauseBtn.addEventListener('click', togglePlayPause);
 stopBtn.addEventListener('click', stopAudio);
+repeatBtn.addEventListener('click', toggleRepeat);
 progressBar.addEventListener('input', handleSeek); // 'input' fires while dragging
+updateRepeatButtonUI();
 
 const playbackModeRadios = document.querySelectorAll('input[name="playback-mode"]');
 playbackModeRadios.forEach(radio => {
