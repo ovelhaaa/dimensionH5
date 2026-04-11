@@ -2,6 +2,12 @@ import Module from './dist/dimension_chorus.js';
 
 let audioContext;
 let chorusNode;
+const DSP_SAMPLE_RATE = 48000;
+const MP3_BITRATE_KBPS = 192;
+const MP3_FRAME_SIZE = 1152;
+const DSP_CHUNKS_PER_YIELD = 256;
+const MP3_CHUNKS_PER_YIELD = 64;
+let exportDspModulePromise = null;
 
 async function initAudio() {
     if (audioContext) return; // Already initialized
@@ -9,7 +15,7 @@ async function initAudio() {
     // Create an AudioContext. We'll set sample rate to 48000 to match the DSP
     // although it can handle resampling if needed.
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    audioContext = new AudioContext({ sampleRate: 48000 });
+    audioContext = new AudioContext({ sampleRate: DSP_SAMPLE_RATE });
 
     // Ensure it's running (some browsers suspend it)
     if (audioContext.state === 'suspended') {
@@ -300,26 +306,52 @@ function downmixToMono(buffer) {
     return mono;
 }
 
-function resampleLinear(input, srcRate, dstRate) {
-    if (srcRate === dstRate) return input;
-
-    const ratio = srcRate / dstRate;
-    const outLength = Math.ceil(input.length / ratio);
-    const out = new Float32Array(outLength);
-    for (let i = 0; i < outLength; i++) {
-        const srcPos = i * ratio;
-        const idx = Math.floor(srcPos);
-        const frac = srcPos - idx;
-        const a = input[idx] || 0;
-        const b = input[Math.min(idx + 1, input.length - 1)] || 0;
-        out[i] = a + (b - a) * frac;
-    }
-    return out;
+function yieldToEventLoop() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
-async function renderProcessedStereoForExport() {
-    const monoIn = resampleLinear(downmixToMono(decodedBuffer), decodedBuffer.sampleRate, 48000);
-    const module = await Module();
+async function getExportDspModule() {
+    if (!exportDspModulePromise) {
+        exportDspModulePromise = Module();
+    }
+    return exportDspModulePromise;
+}
+
+async function downmixAndResampleForExport(buffer) {
+    if (buffer.sampleRate === DSP_SAMPLE_RATE && buffer.numberOfChannels <= 2) {
+        return downmixToMono(buffer);
+    }
+
+    const targetLength = Math.max(1, Math.ceil(buffer.duration * DSP_SAMPLE_RATE));
+    const offlineCtx = new OfflineAudioContext(1, targetLength, DSP_SAMPLE_RATE);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = buffer;
+
+    if (buffer.numberOfChannels === 1) {
+        source.connect(offlineCtx.destination);
+    } else {
+        const splitter = offlineCtx.createChannelSplitter(buffer.numberOfChannels);
+        const gainL = offlineCtx.createGain();
+        const gainR = offlineCtx.createGain();
+        gainL.gain.value = 0.5;
+        gainR.gain.value = 0.5;
+
+        source.connect(splitter);
+        splitter.connect(gainL, 0);
+        splitter.connect(gainR, 1);
+        gainL.connect(offlineCtx.destination);
+        gainR.connect(offlineCtx.destination);
+    }
+
+    source.start(0);
+    const rendered = await offlineCtx.startRendering();
+    return new Float32Array(rendered.getChannelData(0));
+}
+
+async function renderProcessedStereoForExport(onProgress) {
+    onProgress('Resampling...', 5);
+    const monoIn = await downmixAndResampleForExport(decodedBuffer);
+    const module = await getExportDspModule();
     module._dimension_init();
 
     module._dimension_set_selection_mode(currentSelectionMode);
@@ -357,6 +389,10 @@ async function renderProcessedStereoForExport() {
 
     const left = new Float32Array(monoIn.length);
     const right = new Float32Array(monoIn.length);
+    const totalBlocks = Math.ceil(monoIn.length / blockSize);
+    let processedBlocks = 0;
+
+    onProgress('Processing DSP...', 15);
     for (let i = 0; i < monoIn.length; i += blockSize) {
         for (let j = 0; j < blockSize; j++) {
             inBuffer[j] = (i + j < monoIn.length) ? monoIn[i + j] : 0;
@@ -366,18 +402,24 @@ async function renderProcessedStereoForExport() {
             left[i + j] = outBuffer[j * 2];
             right[i + j] = outBuffer[j * 2 + 1];
         }
+
+        processedBlocks++;
+        if ((processedBlocks % DSP_CHUNKS_PER_YIELD) === 0) {
+            const progress = 15 + Math.round((processedBlocks / totalBlocks) * 60);
+            onProgress('Processing DSP...', Math.min(progress, 75));
+            await yieldToEventLoop();
+        }
     }
 
-    return { left, right, sampleRate: 48000 };
+    onProgress('Processing DSP...', 75);
+    return { left, right, sampleRate: DSP_SAMPLE_RATE };
 }
 
-function floatToInt16Chunk(channelData, start, size) {
-    const out = new Int16Array(size);
+function fillInt16Buffer(channelData, start, size, out) {
     for (let i = 0; i < size; i++) {
         const sample = Math.max(-1, Math.min(1, channelData[start + i] || 0));
         out[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
     }
-    return out;
 }
 
 async function exportProcessedMp3() {
@@ -388,21 +430,38 @@ async function exportProcessedMp3() {
     uploadError.style.display = 'none';
 
     try {
-        const { left, right, sampleRate } = await renderProcessedStereoForExport();
+        const { left, right, sampleRate } = await renderProcessedStereoForExport((label, pct) => {
+            exportMp3Btn.innerText = `${label} ${pct}%`;
+        });
         const lame = await import('https://esm.sh/lamejs@1.2.1');
-        const encoder = new lame.Mp3Encoder(2, sampleRate, 192);
-        const frameSize = 1152;
+        const encoder = new lame.Mp3Encoder(2, sampleRate, MP3_BITRATE_KBPS);
         const chunks = [];
+        const leftChunk = new Int16Array(MP3_FRAME_SIZE);
+        const rightChunk = new Int16Array(MP3_FRAME_SIZE);
+        let encodedFrames = 0;
+        const totalFrames = Math.ceil(left.length / MP3_FRAME_SIZE);
 
-        for (let i = 0; i < left.length; i += frameSize) {
-            const blockLen = Math.min(frameSize, left.length - i);
+        for (let i = 0; i < left.length; i += MP3_FRAME_SIZE) {
+            const blockLen = Math.min(MP3_FRAME_SIZE, left.length - i);
+            leftChunk.fill(0);
+            rightChunk.fill(0);
+            fillInt16Buffer(left, i, blockLen, leftChunk);
+            fillInt16Buffer(right, i, blockLen, rightChunk);
             const mp3buf = encoder.encodeBuffer(
-                floatToInt16Chunk(left, i, blockLen),
-                floatToInt16Chunk(right, i, blockLen)
+                leftChunk,
+                rightChunk
             );
             if (mp3buf.length > 0) chunks.push(new Uint8Array(mp3buf));
+
+            encodedFrames++;
+            if ((encodedFrames % MP3_CHUNKS_PER_YIELD) === 0) {
+                const progress = 75 + Math.round((encodedFrames / totalFrames) * 20);
+                exportMp3Btn.innerText = `Encoding MP3... ${Math.min(progress, 95)}%`;
+                await yieldToEventLoop();
+            }
         }
 
+        exportMp3Btn.innerText = 'Encoding MP3... 98%';
         const tail = encoder.flush();
         if (tail.length > 0) chunks.push(new Uint8Array(tail));
 
@@ -416,9 +475,10 @@ async function exportProcessedMp3() {
         a.download = `${baseName}_dimension_processed.mp3`;
         a.click();
         URL.revokeObjectURL(url);
+        exportMp3Btn.innerText = 'Done 100%';
     } catch (error) {
         console.error('MP3 export error:', error);
-        uploadError.innerText = 'Falha ao exportar MP3. Verifique sua conexão e tente novamente.';
+        uploadError.innerText = 'Falha ao exportar MP3. Tente novamente ou use um arquivo menor.';
         uploadError.style.display = 'block';
     } finally {
         exportMp3Btn.disabled = false;
