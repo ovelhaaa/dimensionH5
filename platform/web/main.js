@@ -1,3 +1,5 @@
+import Module from './dist/dimension_chorus.js';
+
 let audioContext;
 let chorusNode;
 
@@ -142,11 +144,13 @@ const transportControls = document.getElementById('transport-controls');
 const playPauseBtn = document.getElementById('play-pause-btn');
 const stopBtn = document.getElementById('stop-btn');
 const repeatBtn = document.getElementById('repeat-btn');
+const exportMp3Btn = document.getElementById('export-mp3-btn');
 
 const progressContainer = document.getElementById('progress-container');
 const progressBar = document.getElementById('progress-bar');
 const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
+exportMp3Btn.disabled = true;
 
 function formatTime(seconds) {
     const min = Math.floor(seconds / 60);
@@ -234,6 +238,7 @@ function handleFileUpload(event) {
             progressContainer.style.display = 'flex';
             playPauseBtn.disabled = false;
             stopBtn.disabled = true;
+            exportMp3Btn.disabled = false;
             playPauseBtn.innerText = 'Play';
             playPauseBtn.classList.remove('playing');
 
@@ -266,6 +271,158 @@ function cleanupAudioNodes() {
     if (currentDownmixer) {
         currentDownmixer.disconnect();
         currentDownmixer = null;
+    }
+}
+
+function getCurrentModeMask() {
+    let mask = 0;
+    modeCheckboxes.forEach(cb => {
+        if (cb.checked) {
+            mask |= (1 << parseInt(cb.value, 10));
+        }
+    });
+    return mask || 1;
+}
+
+function downmixToMono(buffer) {
+    const frameCount = buffer.length;
+    const mono = new Float32Array(frameCount);
+    if (buffer.numberOfChannels === 1) {
+        mono.set(buffer.getChannelData(0));
+        return mono;
+    }
+
+    const ch0 = buffer.getChannelData(0);
+    const ch1 = buffer.getChannelData(1);
+    for (let i = 0; i < frameCount; i++) {
+        mono[i] = 0.5 * (ch0[i] + ch1[i]);
+    }
+    return mono;
+}
+
+function resampleLinear(input, srcRate, dstRate) {
+    if (srcRate === dstRate) return input;
+
+    const ratio = srcRate / dstRate;
+    const outLength = Math.ceil(input.length / ratio);
+    const out = new Float32Array(outLength);
+    for (let i = 0; i < outLength; i++) {
+        const srcPos = i * ratio;
+        const idx = Math.floor(srcPos);
+        const frac = srcPos - idx;
+        const a = input[idx] || 0;
+        const b = input[Math.min(idx + 1, input.length - 1)] || 0;
+        out[i] = a + (b - a) * frac;
+    }
+    return out;
+}
+
+async function renderProcessedStereoForExport() {
+    const monoIn = resampleLinear(downmixToMono(decodedBuffer), decodedBuffer.sampleRate, 48000);
+    const module = await Module();
+    module._dimension_init();
+
+    module._dimension_set_selection_mode(currentSelectionMode);
+    if (currentSelectionMode === 0) {
+        const checked = Array.from(modeCheckboxes).find(cb => cb.checked) || modeCheckboxes[0];
+        module._dimension_set_mode(parseInt(checked.value, 10));
+    } else {
+        module._dimension_set_mode_mask(getCurrentModeMask());
+    }
+
+    if (isCustomMode && currentDSPParams) {
+        module._dimension_enable_custom_params(1);
+        module._dimension_set_rate(currentDSPParams.rateHz);
+        module._dimension_set_base_ms(currentDSPParams.baseMs);
+        module._dimension_set_depth_ms(currentDSPParams.depthMs);
+        module._dimension_set_main_wet(currentDSPParams.mainWet);
+        module._dimension_set_cross_wet(currentDSPParams.crossWet);
+        module._dimension_set_hpf_hz(1, currentDSPParams.hpf1Hz);
+        module._dimension_set_hpf_hz(2, currentDSPParams.hpf2Hz);
+        module._dimension_set_lpf_hz(1, currentDSPParams.lpf1Hz);
+        module._dimension_set_lpf_hz(2, currentDSPParams.lpf2Hz);
+        module._dimension_set_wet_gain(1, currentDSPParams.wet1Gain);
+        module._dimension_set_wet_gain(2, currentDSPParams.wet2Gain);
+        module._dimension_set_base_offset2_ms(currentDSPParams.baseOffset2Ms);
+        module._dimension_set_depth2_scale(currentDSPParams.depth2Scale);
+    } else {
+        module._dimension_enable_custom_params(0);
+    }
+
+    const inPtr = module._dimension_get_in_buffer();
+    const outPtr = module._dimension_get_out_buffer();
+    const blockSize = module._dimension_get_block_size();
+    const inBuffer = new Float32Array(module.HEAPF32.buffer, inPtr, blockSize);
+    const outBuffer = new Float32Array(module.HEAPF32.buffer, outPtr, blockSize * 2);
+
+    const left = new Float32Array(monoIn.length);
+    const right = new Float32Array(monoIn.length);
+    for (let i = 0; i < monoIn.length; i += blockSize) {
+        for (let j = 0; j < blockSize; j++) {
+            inBuffer[j] = (i + j < monoIn.length) ? monoIn[i + j] : 0;
+        }
+        module._dimension_process();
+        for (let j = 0; j < blockSize && (i + j) < monoIn.length; j++) {
+            left[i + j] = outBuffer[j * 2];
+            right[i + j] = outBuffer[j * 2 + 1];
+        }
+    }
+
+    return { left, right, sampleRate: 48000 };
+}
+
+function floatToInt16Chunk(channelData, start, size) {
+    const out = new Int16Array(size);
+    for (let i = 0; i < size; i++) {
+        const sample = Math.max(-1, Math.min(1, channelData[start + i] || 0));
+        out[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+    }
+    return out;
+}
+
+async function exportProcessedMp3() {
+    if (!decodedBuffer) return;
+
+    exportMp3Btn.disabled = true;
+    exportMp3Btn.innerText = 'Exporting...';
+    uploadError.style.display = 'none';
+
+    try {
+        const { left, right, sampleRate } = await renderProcessedStereoForExport();
+        const lame = await import('https://esm.sh/lamejs@1.2.1');
+        const encoder = new lame.Mp3Encoder(2, sampleRate, 192);
+        const frameSize = 1152;
+        const chunks = [];
+
+        for (let i = 0; i < left.length; i += frameSize) {
+            const blockLen = Math.min(frameSize, left.length - i);
+            const mp3buf = encoder.encodeBuffer(
+                floatToInt16Chunk(left, i, blockLen),
+                floatToInt16Chunk(right, i, blockLen)
+            );
+            if (mp3buf.length > 0) chunks.push(new Uint8Array(mp3buf));
+        }
+
+        const tail = encoder.flush();
+        if (tail.length > 0) chunks.push(new Uint8Array(tail));
+
+        const blob = new Blob(chunks, { type: 'audio/mpeg' });
+        const baseName = (audioUpload.files[0]?.name || 'processed')
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[^\w\-]+/g, '_');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_dimension_processed.mp3`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('MP3 export error:', error);
+        uploadError.innerText = 'Falha ao exportar MP3. Verifique sua conexão e tente novamente.';
+        uploadError.style.display = 'block';
+    } finally {
+        exportMp3Btn.disabled = false;
+        exportMp3Btn.innerText = 'Export MP3';
     }
 }
 
@@ -407,6 +564,7 @@ audioUpload.addEventListener('change', handleFileUpload);
 playPauseBtn.addEventListener('click', togglePlayPause);
 stopBtn.addEventListener('click', stopAudio);
 repeatBtn.addEventListener('click', toggleRepeat);
+exportMp3Btn.addEventListener('click', exportProcessedMp3);
 progressBar.addEventListener('input', handleSeek); // 'input' fires while dragging
 updateRepeatButtonUI();
 
