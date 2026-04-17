@@ -53,7 +53,8 @@ static inline int32_t AudioEngine_PackTx24In32(int32_t sample_24bit)
 static inline void AudioEngine_ConvertInputPcm32ToMonoFloat(const int32_t* rxHalfBuffer, float* outMono, size_t frames)
 {
     // Escala baseada nos 24 bits reais: [-8388608, 8388607]
-    const float norm = 1.0f / 8388608.0f;
+    // Definido explicitamente como literal para garantir multiplicacao no hot-path.
+    const float norm = 1.1920928955078125e-7f; // 1.0f / 8388608.0f
 
     for (size_t i = 0; i < frames; i++) {
         // Pega apenas o canal L (índice 0 do par L/R)
