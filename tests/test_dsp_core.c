@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "core/dimension_chorus.h"
+#include "core/dsp_biquad.h"
 #include "core/dsp_common.h"
 #include "test_signals.h"
 
@@ -94,6 +95,52 @@ int test_combo_mode_logic() {
     }
 
     printf("  [OK] Combo mode parameters resolve predictably.\n");
+    return 0;
+}
+
+int test_biquad_filter_coefficients() {
+    printf("Running Biquad Filter Coefficients Test...\n");
+    BiquadDf2T bq;
+    float fc = 1000.0f;
+    float q = 0.707f;
+    float gain_dc, gain_nyquist;
+
+    // Test LPF
+    Dsp_BiquadInit(&bq);
+    Dsp_BiquadCalcLPF(&bq, fc, q);
+
+    // H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
+    // At DC (z=1): H(1) = (b0 + b1 + b2) / (1 + a1 + a2)
+    gain_dc = (bq.b0 + bq.b1 + bq.b2) / (1.0f + bq.a1 + bq.a2);
+    // At Nyquist (z=-1): H(-1) = (b0 - b1 + b2) / (1 - a1 + a2)
+    gain_nyquist = (bq.b0 - bq.b1 + bq.b2) / (1.0f - bq.a1 + bq.a2);
+
+    if (!compare_float(gain_dc, 1.0f, 1e-5f)) {
+        printf("  [FAIL] LPF DC gain mismatch: %f (expected 1.0)\n", gain_dc);
+        return 1;
+    }
+    if (!compare_float(gain_nyquist, 0.0f, 1e-5f)) {
+        printf("  [FAIL] LPF Nyquist gain mismatch: %f (expected 0.0)\n", gain_nyquist);
+        return 1;
+    }
+
+    // Test HPF
+    Dsp_BiquadInit(&bq);
+    Dsp_BiquadCalcHPF(&bq, fc, q);
+
+    gain_dc = (bq.b0 + bq.b1 + bq.b2) / (1.0f + bq.a1 + bq.a2);
+    gain_nyquist = (bq.b0 - bq.b1 + bq.b2) / (1.0f - bq.a1 + bq.a2);
+
+    if (!compare_float(gain_dc, 0.0f, 1e-5f)) {
+        printf("  [FAIL] HPF DC gain mismatch: %f (expected 0.0)\n", gain_dc);
+        return 1;
+    }
+    if (!compare_float(gain_nyquist, 1.0f, 1e-5f)) {
+        printf("  [FAIL] HPF Nyquist gain mismatch: %f (expected 1.0)\n", gain_nyquist);
+        return 1;
+    }
+
+    printf("  [OK] Biquad coefficients verified at DC and Nyquist.\n");
     return 0;
 }
 
@@ -325,6 +372,7 @@ int test_mono_summing() {
 int main() {
     printf("=== Dimension Chorus DSP Core Tests ===\n");
     int failures = 0;
+    failures += test_biquad_filter_coefficients();
     failures += test_mode_table_ranges();
     failures += test_combo_mode_logic();
     failures += test_voice_asymmetry_config();
