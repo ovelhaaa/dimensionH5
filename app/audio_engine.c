@@ -2,6 +2,7 @@
 #include "platform/stm32h5/audio_buffers.h"
 #include "core/dimension_chorus.h"
 #include <string.h>
+#include <math.h>
 
 // Buffers internos para conversão (processamento em blocos de 32 frames)
 static float in_mono[AUDIO_BLOCK_FRAMES];
@@ -81,8 +82,7 @@ static inline void AudioEngine_ConvertOutputFloatToPcm32(const float* inStereo, 
         float sample = inStereo[i];
 
         // Saturação final para evitar wraps no formato inteiro
-        if (sample > clip_max) sample = clip_max;
-        else if (sample < clip_min) sample = clip_min;
+        sample = fminf(fmaxf(sample, clip_min), clip_max);
 
         // Converter para a escala 24-bit int
         int32_t sample_24bit = (int32_t)(sample * scale);
