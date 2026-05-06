@@ -26,6 +26,8 @@
 #define CENTER_PRESERVE_MIN 0.70f
 #define STEREO_DIFF_MIN 0.01f
 
+#define DUMMY_RATE 99.99f
+
 #define MONO_SUM_TEST_DURATION_MS 100.0f
 #define MONO_SUM_TEST_FRAMES ((size_t)((MONO_SUM_TEST_DURATION_MS / 1000.0f) * DSP_SAMPLE_RATE))
 
@@ -280,27 +282,28 @@ int test_set_mode_mask() {
 
     // Scenario 1: Single selection - Mask should update but params shouldn't
     s.selectionMode = DIMENSION_SELECTION_SINGLE;
-    DimensionModeParams p1 = DimensionMode_GetParams(DIMENSION_MODE_1);
 
-    // Force targets to p1
-    s.targetRate = p1.rateHz;
+    // Set targetRate to a dummy value to ensure it's not overwritten
+    s.targetRate = DUMMY_RATE;
 
-    DimensionChorus_SetModeMask(&s, 2); // Mode 2 bit
-    if (s.modeMask != 2) {
+    const uint8_t mask2 = (1 << DIMENSION_MODE_2);
+    DimensionChorus_SetModeMask(&s, mask2);
+    if (s.modeMask != mask2) {
         printf("  [FAIL] Mode mask not updated in SINGLE mode.\n");
         return 1;
     }
-    if (!compare_float(s.targetRate, p1.rateHz, 1e-6f)) {
+    if (!compare_float(s.targetRate, DUMMY_RATE, 1e-6f)) {
         printf("  [FAIL] Params resolved unexpectedly in SINGLE mode.\n");
         return 1;
     }
 
     // Scenario 2: Combo selection - Mask updates and params resolve
     DimensionChorus_SetSelectionMode(&s, DIMENSION_SELECTION_COMBO);
-    DimensionChorus_SetModeMask(&s, 3); // Mode 1 + 2
-    DimensionModeParams comboParams = DimensionMode_GetComboParams(3);
+    const uint8_t mask12 = (1 << DIMENSION_MODE_1) | (1 << DIMENSION_MODE_2);
+    DimensionChorus_SetModeMask(&s, mask12);
+    DimensionModeParams comboParams = DimensionMode_GetComboParams(mask12);
 
-    if (s.modeMask != 3) {
+    if (s.modeMask != mask12) {
         printf("  [FAIL] Mode mask not updated in COMBO mode.\n");
         return 1;
     }
@@ -310,13 +313,15 @@ int test_set_mode_mask() {
     }
 
     // Scenario 3: Custom params enabled - Mask updates but custom params stay
+    DimensionModeParams p1 = DimensionMode_GetParams(DIMENSION_MODE_1);
     DimensionModeParams custom = p1;
     custom.rateHz = 12.34f;
     DimensionChorus_SetCustomParams(&s, custom);
     DimensionChorus_EnableCustomParams(&s, 1);
 
-    DimensionChorus_SetModeMask(&s, 4);
-    if (s.modeMask != 4) {
+    const uint8_t mask3 = (1 << DIMENSION_MODE_3);
+    DimensionChorus_SetModeMask(&s, mask3);
+    if (s.modeMask != mask3) {
         printf("  [FAIL] Mode mask not updated with Custom Params.\n");
         return 1;
     }
