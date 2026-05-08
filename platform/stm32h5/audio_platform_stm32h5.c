@@ -48,14 +48,6 @@ void AudioPlatform_Start(void)
     // HAL_SAI_Receive_DMA(&hsai_BlockB1,  (uint8_t*)dma_rx_buffer, AUDIO_FULL_BUFFER_WORDS);
 }
 
-void AudioPlatform_Stop(void)
-{
-    // PONTO DE INTEGRAÇÃO DO CUBEMX:
-    // Paralisa as transferências.
-    // HAL_SAI_DMAStop(&hsai_BlockA1);
-    // HAL_SAI_DMAStop(&hsai_BlockB1);
-}
-
 void AudioPlatform_ProcessLoop(void)
 {
     // Esta função vive no main loop. Executa FORA da ISR.
