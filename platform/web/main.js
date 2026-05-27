@@ -443,10 +443,14 @@ async function exportProcessedMp3() {
 
         for (let i = 0; i < left.length; i += MP3_FRAME_SIZE) {
             const blockLen = Math.min(MP3_FRAME_SIZE, left.length - i);
-            leftChunk.fill(0);
-            rightChunk.fill(0);
             fillInt16Buffer(left, i, blockLen, leftChunk);
             fillInt16Buffer(right, i, blockLen, rightChunk);
+
+            if (blockLen < MP3_FRAME_SIZE) {
+                leftChunk.fill(0, blockLen);
+                rightChunk.fill(0, blockLen);
+            }
+
             const mp3buf = encoder.encodeBuffer(
                 leftChunk,
                 rightChunk
