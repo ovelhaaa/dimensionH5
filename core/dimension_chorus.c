@@ -193,6 +193,110 @@ static float Dimension_Clampf(float val, float min, float max) {
     return val;
 }
 
+/**
+ * @brief Internal parameter structure for per-block constant calculations.
+ */
+typedef struct {
+    float baseSamps;
+    float depthSamps;
+    float baseOffset2Samps;
+    float ratePhaseInc;
+} DimensionProcessParams;
+
+/**
+ * @brief Results of processing a single sample.
+ */
+typedef struct {
+    float outL;
+    float outR;
+    float wet1;
+    float wet2;
+} DimensionSampleResult;
+
+/**
+ * @brief Calculate block-level parameters for the DSP processing loop.
+ */
+static inline DimensionProcessParams DimensionChorus_CalculateProcessParams(const DimensionChorusState* s)
+{
+    const float samplesPerMs = DSP_SAMPLE_RATE / 1000.0f;
+    DimensionProcessParams p;
+    p.baseSamps  = s->baseMs * samplesPerMs;
+    p.depthSamps = s->depth  * samplesPerMs;
+    p.baseOffset2Samps = s->baseOffset2Ms * samplesPerMs;
+    p.ratePhaseInc = s->rate / DSP_SAMPLE_RATE;
+    return p;
+}
+
+/**
+ * @brief Core per-sample DSP logic for the Dimension Chorus.
+ */
+static inline DimensionSampleResult DimensionChorus_ProcessSample(
+    DimensionChorusState* s,
+    float dry,
+    const DimensionProcessParams* p,
+    uint32_t wIdx)
+{
+    // 1. Write input to delay buffer
+    s->delayBuffer[wIdx] = dry;
+
+    // 2. Compute LFO and Smoothed Triangle
+    s->phaseAcc += p->ratePhaseInc;
+    if (s->phaseAcc >= 1.0f) {
+        s->phaseAcc -= 1.0f;
+    }
+
+    // Generate rough triangle [-1, 1]
+    float triRaw;
+    if (s->phaseAcc < 0.5f) {
+        triRaw = 4.0f * s->phaseAcc - 1.0f;
+    } else {
+        triRaw = 3.0f - 4.0f * s->phaseAcc;
+    }
+
+    // Low-pass smooth + slight shaping to hide geometric corners
+    s->lfo1Smoothed += s->lfoCoef * (triRaw - s->lfo1Smoothed);
+    s->lfo2Smoothed += s->lfoCoef2 * (triRaw - s->lfo2Smoothed);
+    const float lfo1 = Dimension_LfoShape(s->lfo1Smoothed);
+    const float lfo2 = Dimension_LfoShape(s->lfo2Smoothed);
+
+    // Calculate actual delay taps
+    const float tapTime1 = p->baseSamps + p->depthSamps * lfo1;
+    const float tapTime2 = (p->baseSamps + p->baseOffset2Samps) - (p->depthSamps * s->depth2Scale * lfo2);
+
+    float readPos1 = (float)wIdx - tapTime1;
+    float readPos2 = (float)wIdx - tapTime2;
+
+    if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
+    if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
+
+    // 3. Hermite Interpolated Read
+    float wet1 = Dsp_ReadHermite(s->delayBuffer, readPos1);
+    float wet2 = Dsp_ReadHermite(s->delayBuffer, readPos2);
+
+    // 4. Voicing HPF + LPF
+    wet1 = Dsp_BiquadProcess(&s->wet1Hpf, wet1);
+    wet1 = Dimension_WetSoftSat(wet1);
+    wet1 = Dsp_BiquadProcess(&s->wet1Lpf, wet1);
+    wet1 *= s->wet1Gain;
+
+    wet2 = Dsp_BiquadProcess(&s->wet2Hpf, wet2);
+    wet2 = Dimension_WetSoftSat(wet2);
+    wet2 = Dsp_BiquadProcess(&s->wet2Lpf, wet2);
+    wet2 *= s->wet2Gain;
+
+    // 5. Stereo M/S wet recombination to preserve center while widening sides
+    const float wetMid = 0.5f * (wet1 + wet2);
+    const float wetSide = 0.5f * (wet1 - wet2);
+
+    DimensionSampleResult res;
+    res.outL = s->dryGain * dry + s->mainW * wetMid + s->crossW * wetSide;
+    res.outR = s->dryGain * dry + s->mainW * wetMid - s->crossW * wetSide;
+    res.wet1 = wet1;
+    res.wet2 = wet2;
+
+    return res;
+}
+
 void DimensionChorus_SetCustomParams(DimensionChorusState* s, DimensionModeParams params)
 {
     // Apply safety clamps to prevent delay line overruns or filter explosion
@@ -236,85 +340,19 @@ void DimensionChorus_ProcessBlock(
     // Update control params (rate, baseMs, etc.) once per block
     Dimension_UpdateControl(s);
 
-    // Convert milliseconds to sample lengths (based on native SR)
-    const float samplesPerMs = DSP_SAMPLE_RATE / 1000.0f;
-    const float baseSamps  = s->baseMs * samplesPerMs;
-    const float depthSamps = s->depth  * samplesPerMs;
-    const float baseOffset2Samps = s->baseOffset2Ms * samplesPerMs;
-    const float ratePhaseInc = s->rate / DSP_SAMPLE_RATE;
+    // Calculate block-level parameters
+    DimensionProcessParams p = DimensionChorus_CalculateProcessParams(s);
 
     uint32_t wIdx = s->writeIndex;
 
     for (size_t i = 0; i < blockSize; i++) {
-        const float dry = inMono[i];
+        DimensionSampleResult res = DimensionChorus_ProcessSample(s, inMono[i], &p, wIdx);
 
-        // 1. Write input to delay buffer
-        s->delayBuffer[wIdx] = dry;
+        // Transparent safety clamp (should rarely engage in normal use)
+        outStereo[2 * i + 0] = Dimension_OutputSafety(res.outL);
+        outStereo[2 * i + 1] = Dimension_OutputSafety(res.outR);
 
-        // 2. Compute LFO and Smoothed Triangle
-        s->phaseAcc += ratePhaseInc;
-        if (s->phaseAcc >= 1.0f) {
-            s->phaseAcc -= 1.0f;
-        }
-
-        // Generate rough triangle [-1, 1]
-        float triRaw;
-        if (s->phaseAcc < 0.5f) {
-            triRaw = 4.0f * s->phaseAcc - 1.0f;
-        } else {
-            triRaw = 3.0f - 4.0f * s->phaseAcc;
-        }
-
-        // Low-pass smooth + slight shaping to hide geometric corners
-        s->lfo1Smoothed += s->lfoCoef * (triRaw - s->lfo1Smoothed);
-        s->lfo2Smoothed += s->lfoCoef2 * (triRaw - s->lfo2Smoothed);
-        const float lfo1 = Dimension_LfoShape(s->lfo1Smoothed);
-        const float lfo2 = Dimension_LfoShape(s->lfo2Smoothed);
-
-        // Calculate actual delay taps
-        const float tapTime1 = baseSamps + depthSamps * lfo1;
-        const float tapTime2 = (baseSamps + baseOffset2Samps) - (depthSamps * s->depth2Scale * lfo2);
-
-        // Calculate fractional read positions.
-        // The delay is measured from the current writeIndex.
-        // tapTime represents the delay in samples.
-        // Example: If wIdx = 5, tapTime = 2.5, readPos = 2.5.
-
-        float readPos1 = (float)wIdx - tapTime1;
-        float readPos2 = (float)wIdx - tapTime2;
-
-        // Handling negative float values correctly before truncation in Dsp_ReadHermite.
-        // While bitwise masking in Hermite handles integers well, shifting the float
-        // ensures the fractional part remains correctly oriented (positive fractional distance).
-        if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
-        if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
-
-        // 3. Hermite Interpolated Read
-        float wet1 = Dsp_ReadHermite(s->delayBuffer, readPos1);
-        float wet2 = Dsp_ReadHermite(s->delayBuffer, readPos2);
-
-        // 4. Voicing HPF + LPF
-        wet1 = Dsp_BiquadProcess(&s->wet1Hpf, wet1);
-        wet1 = Dimension_WetSoftSat(wet1);
-        wet1 = Dsp_BiquadProcess(&s->wet1Lpf, wet1);
-        wet1 *= s->wet1Gain;
-
-        wet2 = Dsp_BiquadProcess(&s->wet2Hpf, wet2);
-        wet2 = Dimension_WetSoftSat(wet2);
-        wet2 = Dsp_BiquadProcess(&s->wet2Lpf, wet2);
-        wet2 *= s->wet2Gain;
-
-        // 5. Stereo M/S wet recombination to preserve center while widening sides
-        const float wetMid = 0.5f * (wet1 + wet2);
-        const float wetSide = 0.5f * (wet1 - wet2);
-        float outL = s->dryGain * dry + s->mainW * wetMid + s->crossW * wetSide;
-        float outR = s->dryGain * dry + s->mainW * wetMid - s->crossW * wetSide;
-
-        // 6. Transparent safety clamp (should rarely engage in normal use)
-        outStereo[2 * i + 0] = Dimension_OutputSafety(outL);
-        outStereo[2 * i + 1] = Dimension_OutputSafety(outR);
-
-        // 7. Advance write pointer
+        // Advance write pointer
         wIdx = (wIdx + 1u) & DELAY_BUFFER_MASK;
     }
 
@@ -334,76 +372,19 @@ void DimensionChorus_ProcessBlock_Inspect(
     // Update control params (rate, baseMs, etc.) once per block
     Dimension_UpdateControl(s);
 
-    // Convert milliseconds to sample lengths (based on native SR)
-    const float samplesPerMs = DSP_SAMPLE_RATE / 1000.0f;
-    const float baseSamps  = s->baseMs * samplesPerMs;
-    const float depthSamps = s->depth  * samplesPerMs;
-    const float baseOffset2Samps = s->baseOffset2Ms * samplesPerMs;
-    const float ratePhaseInc = s->rate / DSP_SAMPLE_RATE;
+    // Calculate block-level parameters
+    DimensionProcessParams p = DimensionChorus_CalculateProcessParams(s);
 
     uint32_t wIdx = s->writeIndex;
 
     for (size_t i = 0; i < blockSize; i++) {
         const float dry = inMono[i];
+        DimensionSampleResult res = DimensionChorus_ProcessSample(s, dry, &p, wIdx);
 
-        // 1. Write input to delay buffer
-        s->delayBuffer[wIdx] = dry;
+        float clippedL = Dimension_OutputSafety(res.outL);
+        float clippedR = Dimension_OutputSafety(res.outR);
 
-        // 2. Compute LFO and Smoothed Triangle
-        s->phaseAcc += ratePhaseInc;
-        if (s->phaseAcc >= 1.0f) {
-            s->phaseAcc -= 1.0f;
-        }
-
-        // Generate rough triangle [-1, 1]
-        float triRaw;
-        if (s->phaseAcc < 0.5f) {
-            triRaw = 4.0f * s->phaseAcc - 1.0f;
-        } else {
-            triRaw = 3.0f - 4.0f * s->phaseAcc;
-        }
-
-        // Low-pass smooth + slight shaping to hide geometric corners
-        s->lfo1Smoothed += s->lfoCoef * (triRaw - s->lfo1Smoothed);
-        s->lfo2Smoothed += s->lfoCoef2 * (triRaw - s->lfo2Smoothed);
-        const float lfo1 = Dimension_LfoShape(s->lfo1Smoothed);
-        const float lfo2 = Dimension_LfoShape(s->lfo2Smoothed);
-
-        // Calculate actual delay taps
-        const float tapTime1 = baseSamps + depthSamps * lfo1;
-        const float tapTime2 = (baseSamps + baseOffset2Samps) - (depthSamps * s->depth2Scale * lfo2);
-
-        float readPos1 = (float)wIdx - tapTime1;
-        float readPos2 = (float)wIdx - tapTime2;
-
-        if (readPos1 < 0.0f) readPos1 += (float)DELAY_BUFFER_SIZE;
-        if (readPos2 < 0.0f) readPos2 += (float)DELAY_BUFFER_SIZE;
-
-        // 3. Hermite Interpolated Read
-        float wet1 = Dsp_ReadHermite(s->delayBuffer, readPos1);
-        float wet2 = Dsp_ReadHermite(s->delayBuffer, readPos2);
-
-        // 4. Voicing HPF + LPF
-        wet1 = Dsp_BiquadProcess(&s->wet1Hpf, wet1);
-        wet1 = Dimension_WetSoftSat(wet1);
-        wet1 = Dsp_BiquadProcess(&s->wet1Lpf, wet1);
-        wet1 *= s->wet1Gain;
-
-        wet2 = Dsp_BiquadProcess(&s->wet2Hpf, wet2);
-        wet2 = Dimension_WetSoftSat(wet2);
-        wet2 = Dsp_BiquadProcess(&s->wet2Lpf, wet2);
-        wet2 *= s->wet2Gain;
-
-        // 5. Stereo M/S wet recombination to preserve center while widening sides
-        const float wetMid = 0.5f * (wet1 + wet2);
-        const float wetSide = 0.5f * (wet1 - wet2);
-        float outL = s->dryGain * dry + s->mainW * wetMid + s->crossW * wetSide;
-        float outR = s->dryGain * dry + s->mainW * wetMid - s->crossW * wetSide;
-
-        float clippedL = Dimension_OutputSafety(outL);
-        float clippedR = Dimension_OutputSafety(outR);
-
-        // 6. Output Assignment with Safety Soft Clip
+        // Output Assignment with Safety Soft Clip
         if (outStereo) {
             outStereo[2 * i + 0] = clippedL;
             outStereo[2 * i + 1] = clippedR;
@@ -411,11 +392,11 @@ void DimensionChorus_ProcessBlock_Inspect(
 
         // Inspection outputs
         if (outDry) outDry[i] = dry;
-        if (outWet1) outWet1[i] = wet1;
-        if (outWet2) outWet2[i] = wet2;
+        if (outWet1) outWet1[i] = res.wet1;
+        if (outWet2) outWet2[i] = res.wet2;
         if (outMonoSum) outMonoSum[i] = 0.5f * (clippedL + clippedR); // Simple sum (-6dB)
 
-        // 7. Advance write pointer
+        // Advance write pointer
         wIdx = (wIdx + 1u) & DELAY_BUFFER_MASK;
     }
 
