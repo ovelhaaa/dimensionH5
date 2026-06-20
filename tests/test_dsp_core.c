@@ -273,6 +273,57 @@ int test_stereo_width_vs_center() {
     return 1;
 }
 
+int test_selection_mode_switching() {
+    printf("Running Selection Mode Switching Test...\n");
+    DimensionChorusState chorus;
+    DimensionChorus_Init(&chorus);
+
+    // Initial state: DIMENSION_SELECTION_SINGLE, Mode 1
+    // Mode 1: Rate 0.16
+    if (chorus.selectionMode != DIMENSION_SELECTION_SINGLE) {
+        printf("  [FAIL] Initial selection mode should be SINGLE.\n");
+        return 1;
+    }
+    if (!compare_float(chorus.targetRate, 0.16f, 1e-6f)) {
+        printf("  [FAIL] Initial target rate should be 0.16 for Mode 1.\n");
+        return 1;
+    }
+
+    // Set mask for Mode 4 (Rate 0.48) and switch to COMBO
+    // DimensionChorus_SetModeMask doesn't resolve params if in SINGLE mode
+    DimensionChorus_SetModeMask(&chorus, 1 << DIMENSION_MODE_4);
+    if (!compare_float(chorus.targetRate, 0.16f, 1e-6f)) {
+        printf("  [FAIL] Target rate should NOT have changed yet after SetModeMask in SINGLE mode.\n");
+        return 1;
+    }
+
+    DimensionChorus_SetSelectionMode(&chorus, DIMENSION_SELECTION_COMBO);
+    if (chorus.selectionMode != DIMENSION_SELECTION_COMBO) {
+        printf("  [FAIL] Selection mode should be COMBO.\n");
+        return 1;
+    }
+    // Now it should have resolved to Mode 4 params (Combo with 1 mode = Single mode params)
+    if (!compare_float(chorus.targetRate, 0.48f, 1e-6f)) {
+        printf("  [FAIL] Target rate should have updated to 0.48 after switching to COMBO.\n");
+        return 1;
+    }
+
+    // Switch back to SINGLE
+    DimensionChorus_SetSelectionMode(&chorus, DIMENSION_SELECTION_SINGLE);
+    if (chorus.selectionMode != DIMENSION_SELECTION_SINGLE) {
+        printf("  [FAIL] Selection mode should be SINGLE.\n");
+        return 1;
+    }
+    // Should revert to s->mode which was DIMENSION_MODE_1 (0.16)
+    if (!compare_float(chorus.targetRate, 0.16f, 1e-6f)) {
+        printf("  [FAIL] Target rate should have reverted to 0.16 after switching back to SINGLE.\n");
+        return 1;
+    }
+
+    printf("  [OK] Selection mode switching correctly updates parameters.\n");
+    return 0;
+}
+
 // 3. Mono Summing Phase Cancellation Test
 int test_mono_summing() {
     printf("Running Mono Summing Phase Cancellation Test...\n");
@@ -332,6 +383,7 @@ int main() {
     failures += test_headroom_clipping();
     failures += test_mono_summing();
     failures += test_stereo_width_vs_center();
+    failures += test_selection_mode_switching();
     printf("=======================================\n");
     printf("Tests Failed: %d\n", failures);
     return failures;
