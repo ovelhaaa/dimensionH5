@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
 #include "core/dimension_chorus.h"
 #include "core/dsp_common.h"
 #include "test_signals.h"
@@ -125,7 +128,16 @@ int main(int argc, char** argv) {
     }
 
     // Ensure output folder exists
-    system("mkdir -p tests/output");
+    if (mkdir("tests/output", 0755) != 0) {
+        if (errno != EEXIST) {
+            // If it failed for reason other than already existing,
+            // maybe tests/ doesn't exist in CWD. Try creating tests/ first.
+            mkdir("tests", 0755);
+            if (mkdir("tests/output", 0755) != 0 && errno != EEXIST) {
+                fprintf(stderr, "Warning: Could not ensure tests/output exists (errno %d)\n", errno);
+            }
+        }
+    }
 
     float* inMono = NULL;
     size_t active_frames = TOTAL_FRAMES;
