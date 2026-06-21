@@ -110,6 +110,53 @@ int test_voice_asymmetry_config() {
     return 0;
 }
 
+int test_biquad_filters() {
+    printf("Running Biquad Filter Calculation Test...\n");
+    BiquadDf2T bq;
+    const float fc = 1000.0f;
+    const float q = 0.7071f;
+    const float epsilon = 1e-5f;
+
+    // 1. Test LPF
+    Dsp_BiquadInit(&bq);
+    Dsp_BiquadCalcLPF(&bq, fc, q);
+
+    // DC Gain (z=1) should be 1.0 for LPF
+    float gain_dc = (bq.b0 + bq.b1 + bq.b2) / (1.0f + bq.a1 + bq.a2);
+    if (!compare_float(gain_dc, 1.0f, epsilon)) {
+        printf("  [FAIL] LPF DC gain mismatch: %f (expected 1.0)\n", gain_dc);
+        return 1;
+    }
+
+    // Nyquist Gain (z=-1) should be 0.0 for LPF
+    float gain_nyq = (bq.b0 - bq.b1 + bq.b2) / (1.0f - bq.a1 + bq.a2);
+    if (!compare_float(gain_nyq, 0.0f, epsilon)) {
+        printf("  [FAIL] LPF Nyquist gain mismatch: %f (expected 0.0)\n", gain_nyq);
+        return 1;
+    }
+
+    // 2. Test HPF
+    Dsp_BiquadInit(&bq);
+    Dsp_BiquadCalcHPF(&bq, fc, q);
+
+    // DC Gain (z=1) should be 0.0 for HPF
+    gain_dc = (bq.b0 + bq.b1 + bq.b2) / (1.0f + bq.a1 + bq.a2);
+    if (!compare_float(gain_dc, 0.0f, epsilon)) {
+        printf("  [FAIL] HPF DC gain mismatch: %f (expected 0.0)\n", gain_dc);
+        return 1;
+    }
+
+    // Nyquist Gain (z=-1) should be 1.0 for HPF
+    gain_nyq = (bq.b0 - bq.b1 + bq.b2) / (1.0f - bq.a1 + bq.a2);
+    if (!compare_float(gain_nyq, 1.0f, epsilon)) {
+        printf("  [FAIL] HPF Nyquist gain mismatch: %f (expected 1.0)\n", gain_nyq);
+        return 1;
+    }
+
+    printf("  [OK] Biquad filter coefficients verified at DC and Nyquist.\n");
+    return 0;
+}
+
 // 1. Impulse Response Test (Timing/Fase)
 int test_impulse_response() {
     printf("Running Impulse Response Test...\n");
@@ -389,6 +436,7 @@ int main() {
     failures += test_mode_table_ranges();
     failures += test_combo_mode_logic();
     failures += test_voice_asymmetry_config();
+    failures += test_biquad_filters();
     failures += test_impulse_response();
     failures += test_headroom_clipping();
     failures += test_mono_summing();
