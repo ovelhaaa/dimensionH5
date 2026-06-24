@@ -29,11 +29,6 @@ void AudioPlatform_Init(void);
 void AudioPlatform_Start(void);
 
 /**
- * @brief Para o fluxo DMA.
- */
-void AudioPlatform_Stop(void);
-
-/**
  * @brief Chama o processamento (DSP) pendente no loop principal, se houver dado.
  * Esta função deve ser chamada constantemente no main loop da aplicação.
  * É aqui que a `AudioEngine_ProcessBlock` é disparada de forma segura e não-bloqueante,
