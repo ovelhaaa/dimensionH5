@@ -47,9 +47,12 @@ jobs:
         run: ctest --output-on-failure
 
       - name: Run Offline Renderer
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SAMPLE_FILE: ${{ github.event.inputs.sample_file }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.sample_file }}" != "default (synthetic signals)" ]; then
-            ./build/tests/offline_runner --batch --input="samples/${{ github.event.inputs.sample_file }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SAMPLE_FILE" != "default (synthetic signals)" ]; then
+            ./build/tests/offline_runner --batch --input="samples/$SAMPLE_FILE"
           else
             ./build/tests/offline_runner --batch
           fi
